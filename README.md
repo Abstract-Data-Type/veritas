@@ -2,6 +2,8 @@
 
 ## Members: Jack Webster, Aadity Sharma, Yann Calvo-Lopez, Vineet Jammalamadaka
 
+## Google Drive Link: https://drive.google.com/drive/folders/16DhHYGhWOP0-UIXO258NQ7Z6VN5TJmlq?usp=drive_link
+
 ### Project Overview
 News aggregation and synthesis platform to deliver real time updates on world news while highlighting differing perspectives and potential biases. 
 

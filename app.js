@@ -1,4 +1,34 @@
 // app.js
+
+// Add this to app.js, before the DOMContentLoaded event listener
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+}
+
+// Initialize theme from localStorage or prefer-color-scheme
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (savedTheme) {
+        setTheme(savedTheme);
+    } else if (prefersDark) {
+        setTheme('dark');
+    }
+}
+
+// Add this inside the DOMContentLoaded event listener, at the beginning
+initTheme();
+
+// Add theme toggle functionality
+const themeToggle = document.getElementById('themeToggle');
+if (themeToggle) {
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        setTheme(currentTheme === 'dark' ? 'light' : 'dark');
+    });
+}
 document.addEventListener('DOMContentLoaded', function() {
     // Sample data - in a real app, this would come from your backend
     const articles = [

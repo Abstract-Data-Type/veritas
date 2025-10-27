@@ -292,6 +292,129 @@ body {
     animation: fadeIn 0.3s ease-out forwards;
     opacity: 0;
 }
+/* Add these styles to your styles.css */
+:root {
+    /* Light theme (default) */
+    --primary-color: #2563eb;
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --bg-color: #f9fafb;
+    --card-bg: #ffffff;
+    --border-color: #e5e7eb;
+    --header-bg: #ffffff;
+    --input-bg: #ffffff;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --hover-bg: #f3f4f6;
+    --bias-left: #3b82f6;
+    --bias-center: #10b981;
+    --bias-right: #f59e0b;
+    --bias-left-bg: rgba(59, 130, 246, 0.1);
+    --bias-center-bg: rgba(16, 185, 129, 0.1);
+    --bias-right-bg: rgba(245, 158, 11, 0.1);
+}
+
+[data-theme="dark"] {
+    --primary-color: #60a5fa;
+    --text-primary: #f9fafb;
+    --text-secondary: #d1d5db;
+    --bg-color: #111827;
+    --card-bg: #1f2937;
+    --border-color: #374151;
+    --header-bg: #1f2937;
+    --input-bg: #374151;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --hover-bg: #374151;
+    --bias-left: #93c5fd;
+    --bias-center: #6ee7b7;
+    --bias-right: #fcd34d;
+    --bias-left-bg: rgba(59, 130, 246, 0.2);
+    --bias-center-bg: rgba(16, 185, 129, 0.2);
+    --bias-right-bg: rgba(245, 158, 11, 0.2);
+}
+
+/* Update existing bias classes to use CSS variables */
+.bias-left { background-color: var(--bias-left-bg); color: var(--bias-left); }
+.bias-center { background-color: var(--bias-center-bg); color: var(--bias-center); }
+.bias-right { background-color: var(--bias-right-bg); color: var(--bias-right); }
+
+/* Update app header to use theme variables */
+.app-header {
+    background-color: var(--header-bg);
+    box-shadow: var(--shadow);
+}
+
+/* Update search input and buttons */
+.search-bar input {
+    background-color: var(--input-bg);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.filter-btn {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.filter-btn:hover {
+    background-color: var(--hover-bg);
+}
+
+.filter-btn.active {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+
+/* Theme toggle button */
+.theme-toggle {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 1rem;
+    transition: background-color 0.2s;
+}
+
+.theme-toggle:hover {
+    background-color: var(--hover-bg);
+}
+
+.theme-toggle .moon-icon {
+    display: none;
+}
+
+[data-theme="dark"] .theme-toggle .sun-icon {
+    display: none;
+}
+
+[data-theme="dark"] .theme-toggle .moon-icon {
+    display: block;
+}
+
+/* Update header layout to include theme toggle */
+.app-header .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.app-header nav {
+    display: flex;
+    align-items: center;
+}
+
+/* Make sure the toggle is properly aligned */
+.app-header h1 {
+    margin-right: auto;
+}
 
 .article-card:nth-child(1) { animation-delay: 0.1s; }
 .article-card:nth-child(2) { animation-delay: 0.2s; }

@@ -1,0 +1,51 @@
+# Web Framework
+fastapi==0.104.1
+
+# ASGI Server for production
+uvicorn[standard]==0.24.0
+
+# Database (SQLite is built-in to Python, but you might want additional packages)
+# If you plan to use other databases, uncomment the relevant ones:
+# psycopg2-binary==2.9.9  # For PostgreSQL
+# pymysql==1.1.0          # For MySQL
+# sqlalchemy==2.0.23      # For ORM support
+
+# HTTP Client (for making API requests to news sources)
+httpx==0.25.2
+requests==2.31.0
+
+# Environment variable management
+python-dotenv==1.0.0
+
+# Web scraping (for news article extraction)
+beautifulsoup4==4.12.2
+
+# Natural Language Processing (for bias analysis and summarization)
+nltk==3.8.1
+textblob==0.17.1
+
+# Date and time handling
+python-dateutil==2.8.2
+
+# Logging
+loguru==0.7.2
+
+# Testing (development dependencies)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2  # Already listed above, used for testing FastAPI endpoints
+
+# Code formatting and linting (development dependencies)
+black==23.11.0
+flake8==6.1.0
+isort==5.12.0
+
+# Security
+passlib[bcrypt]==1.7.4  # For password hashing if you implement user authentication
+python-jose[cryptography]==3.3.0  # For JWT tokens
+
+# RSS Feed parsing (for news aggregation)
+feedparser==6.0.10
+
+# Async database support (if needed)
+aiosqlite==0.19.0

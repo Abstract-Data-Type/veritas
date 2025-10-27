@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .db.init_db import get_connection, init_db
+from .api.routes_bias_ratings import router as bias_ratings_router
 from loguru import logger
 
 app = FastAPI(title="Veritas News API", version="1.0.0")
@@ -13,6 +14,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register API routers
+app.include_router(bias_ratings_router, prefix="/bias_ratings", tags=["Bias Ratings"])
 
 # ---- Startup event ----
 @app.on_event("startup")

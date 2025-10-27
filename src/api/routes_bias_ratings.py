@@ -44,12 +44,14 @@ async def get_bias_ratings(conn: Connection = Depends(get_db_connection)):
         )
     
     except Exception as e:
+        conn.close()  # Close connection on error
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve bias ratings: {str(e)}"
         )
-    finally:
-        conn.close()
+    
+    # Close connection on successful completion
+    conn.close()
 
 
 @router.get("/{rating_id}", response_model=BiasRatingResponse)

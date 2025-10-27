@@ -9,7 +9,16 @@ def get_connection() -> Connection:
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
-def init_db(conn: Connection):
+def init_db(conn: Connection) -> bool:
+    """
+    Initialize the database with required tables.
+    
+    Args:
+        conn: SQLite database connection
+        
+    Returns:
+        bool: True if initialization was successful, False otherwise
+    """
     schema = """
     CREATE TABLE IF NOT EXISTS users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,5 +64,12 @@ def init_db(conn: Connection):
         FOREIGN KEY (article_id) REFERENCES articles(article_id)
     );
     """
-    conn.executescript(schema)
-    conn.commit()
+    try:
+        conn.executescript(schema)
+        conn.commit()
+        return True
+    except Exception as e:
+        # Log the error (you might want to use a proper logger here)
+        print(f"Error initializing database: {e}")
+        conn.rollback()
+        return False

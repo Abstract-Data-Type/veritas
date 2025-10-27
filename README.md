@@ -15,3 +15,8 @@ Does the article implicitly or explicitly support positions associated with prog
 Does the article use emotionally charged wording in favor of one side?
 Issue emphasis: Which issues are prioritized (e.g., immigration, climate, taxation), and how are they framed? (What language / quotes support this?)
 Does the article portray any underlying values (individual freedom, social justice, tradition, markets) more aligned with one end of the spectrum?
+
+## Running Tests
+```
+python -m pytest tests/
+```

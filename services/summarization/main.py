@@ -3,6 +3,11 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, field_validator
 from google import genai
 from google.genai import types
+from dotenv import load_dotenv
+
+
+# Load .env if present (supports GEMINI_API_KEY in repo root or service folder)
+load_dotenv()  # loads from current working dir and parent if run from repo root
 
 
 class SummarizeRequest(BaseModel):
@@ -53,7 +58,7 @@ def summarize_with_gemini(article_text: str) -> str:
 
     try:
         client = genai.Client(api_key=api_key)
-        model = "gemini-2.0-flash-exp"
+        model = "gemini-flash-latest"
         
         prompt = f"""Summarize the following news article in 2-3 concise sentences. 
 Focus on the key facts and main points:

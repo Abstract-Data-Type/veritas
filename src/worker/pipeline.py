@@ -2,6 +2,8 @@ import sqlite3
 from typing import List, Optional, Set
 from datetime import datetime
 from loguru import logger
+import httpx
+import os
 
 from .fetchers import ArticleData
 from ..db.init_db import get_connection
@@ -12,6 +14,50 @@ class ArticlePipeline:
     
     def __init__(self):
         self._processed_urls: Set[str] = set()
+        self.summarization_service_url = os.environ.get(
+            "SUMMARIZATION_SERVICE_URL",
+            "http://localhost:8000"
+        )
+    
+    async def _get_article_summary(self, article_text: str) -> Optional[str]:
+        """
+        Get a summary of the article text from the summarization service.
+        
+        Args:
+            article_text: The full text of the article
+            
+        Returns:
+            Summary string or None if summarization fails
+        """
+        if not article_text or len(article_text.strip()) < 50:
+            logger.debug("Article text too short for summarization, skipping")
+            return None
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{self.summarization_service_url}/summarize",
+                    json={"article_text": article_text}
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    summary = data.get("summary", "")
+                    logger.debug(f"Generated summary: {summary[:100]}...")
+                    return summary
+                else:
+                    logger.warning(f"Summarization service returned {response.status_code}")
+                    return None
+        
+        except httpx.TimeoutException:
+            logger.warning("Summarization service timeout, continuing without summary")
+            return None
+        except httpx.RequestError as e:
+            logger.warning(f"Cannot reach summarization service: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting summary: {e}")
+            return None
     
     def _normalize_article(self, article: ArticleData) -> ArticleData:
         """Basic article normalization"""

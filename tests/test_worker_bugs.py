@@ -218,6 +218,39 @@ class TestWorkerEdgeCases:
         
         # Mock articles should respect limit
         articles = []  # Zero articles expected
+    
+    def test_memory_leak_fix(self):
+        """Test that processed_urls memory leak is fixed"""
+        worker = NewsWorker()
+        
+        # Add many URLs to trigger cleanup
+        for i in range(1500):  # More than the 1000 limit
+            worker.processed_urls.add(f"https://test.com/{i}")
+        
+        initial_count = len(worker.processed_urls)
+        assert initial_count == 1500
+        
+        # Trigger cleanup
+        worker.cleanup_memory(max_urls=1000)
+        
+        # Should be reduced to half of max_urls (500)
+        final_count = len(worker.processed_urls)
+        assert final_count == 500
+        assert final_count < initial_count
+    
+    def test_cleanup_not_triggered_when_under_limit(self):
+        """Test cleanup doesn't run when under limit"""
+        worker = NewsWorker()
+        
+        # Add URLs under the limit
+        for i in range(100):
+            worker.processed_urls.add(f"https://test.com/{i}")
+        
+        initial_count = len(worker.processed_urls)
+        worker.cleanup_memory(max_urls=1000)
+        
+        # Should be unchanged
+        assert len(worker.processed_urls) == initial_count
 
 
 if __name__ == "__main__":

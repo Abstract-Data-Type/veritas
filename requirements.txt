@@ -45,7 +45,7 @@ passlib[bcrypt]==1.7.4  # For password hashing if you implement user authenticat
 python-jose[cryptography]==3.3.0  # For JWT tokens
 
 # RSS Feed parsing (for news aggregation)
-feedparser==6.0.10
+feedparser==6.0.11
 
 # Async database support (if needed)
 aiosqlite==0.19.0

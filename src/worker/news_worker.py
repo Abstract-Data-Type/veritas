@@ -184,11 +184,18 @@ class NewsWorker:
             VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             """
             
+            # Handle None publication date with fallback
+            published_at_str = (
+                article["published_at"].isoformat() 
+                if article["published_at"] 
+                else datetime.now(timezone.utc).isoformat()
+            )
+            
             cursor.execute(query, (
                 article["title"],
                 article["source"], 
                 article["url"],
-                article["published_at"].isoformat(),
+                published_at_str,
                 article["raw_text"]
             ))
             

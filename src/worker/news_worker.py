@@ -228,6 +228,10 @@ class NewsWorker:
             conn.close()
         
         logger.info(f"Stored {stored_count}/{len(articles)} articles")
+        
+        # Prevent memory leak by cleaning up old URLs
+        self.cleanup_memory()
+        
         return stored_count
     
     async def run_single_fetch(self, use_cnn: bool = False) -> int:
@@ -350,6 +354,14 @@ class NewsWorker:
             logger.info("Database cleared")
         finally:
             conn.close()
+    
+    def cleanup_memory(self, max_urls: int = 1000):
+        """Clean up processed_urls to prevent memory leak"""
+        if len(self.processed_urls) > max_urls:
+            # Keep only the most recent half
+            urls_to_keep = list(self.processed_urls)[-max_urls//2:]
+            self.processed_urls = set(urls_to_keep)
+            logger.info(f"Cleaned up processed URLs, kept {len(self.processed_urls)}")
 
 
 async def main():

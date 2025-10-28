@@ -4,6 +4,17 @@
 
 ## Google Drive Link: https://drive.google.com/drive/folders/16DhHYGhWOP0-UIXO258NQ7Z6VN5TJmlq?usp=drive_link
 
+## 📚 Documentation
+
+For comprehensive documentation including setup, testing, and implementation details, see the **[docs/](docs/)** folder:
+
+- **[docs/INDEX.md](docs/INDEX.md)** - Start here! Complete documentation index
+- **[docs/guides/EXAMINER.md](docs/guides/EXAMINER.md)** - For examiners and code reviewers
+- **[docs/guides/QUICK_START.md](docs/guides/QUICK_START.md)** - Quick setup and testing
+- **[docs/SUBMISSION_CHECKLIST.md](docs/SUBMISSION_CHECKLIST.md)** - Implementation checklist
+- **[docs/implementation/](docs/implementation/)** - Detailed implementation documentation
+- **[docs/testing/](docs/testing/)** - Testing scenarios and troubleshooting
+
 ### Project Overview
 News aggregation and synthesis platform to deliver real time updates on world news while highlighting differing perspectives and potential biases. 
 

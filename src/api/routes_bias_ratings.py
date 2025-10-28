@@ -212,11 +212,19 @@ async def summarize_article(request: SummarizeRequest):
                     status_code=502,
                     detail="Summary generation failed"
                 )
-            else:
-                logger.warning(f"Unexpected response from summarization service: {response.status_code}")
+            elif response.status_code >= 400:
+                # Forward client errors (4xx) with appropriate status
+                logger.warning(f"Client error from summarization service: {response.status_code} - {response.text}")
                 raise HTTPException(
-                    status_code=500,
-                    detail="Failed to generate summary"
+                    status_code=400,
+                    detail=f"Invalid request to summarization service: {response.text}"
+                )
+            else:
+                # Unexpected status codes (e.g., 3xx redirects)
+                logger.error(f"Unexpected status code from summarization service: {response.status_code}")
+                raise HTTPException(
+                    status_code=502,
+                    detail="Unexpected response from summarization service"
                 )
     
     except httpx.TimeoutException:

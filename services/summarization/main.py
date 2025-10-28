@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, field_validator
 from google import genai
@@ -6,8 +7,11 @@ from google.genai import types
 from dotenv import load_dotenv
 
 
-# Load .env if present (supports GEMINI_API_KEY in repo root or service folder)
-load_dotenv()  # loads from current working dir and parent if run from repo root
+# Load .env from project root (parent directory)
+# This ensures we use the same .env file as the main backend
+project_root = Path(__file__).parent.parent.parent
+env_path = project_root / ".env"
+load_dotenv(dotenv_path=env_path)
 
 
 class SummarizeRequest(BaseModel):
@@ -58,7 +62,7 @@ def summarize_with_gemini(article_text: str) -> str:
 
     try:
         client = genai.Client(api_key=api_key)
-        model = "gemini-flash-latest"
+        model = "gemini-2.0-flash-exp"
         
         prompt = f"""Summarize the following news article in 2-3 concise sentences. 
 Focus on the key facts and main points:

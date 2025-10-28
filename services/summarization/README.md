@@ -18,15 +18,22 @@ FastAPI microservice that provides AI-powered article summarization using Google
 
 ### Installation
 
-1. Install dependencies:
+1. **IMPORTANT**: This service reads the `.env` file from the **project root** (not from this directory).
+   
+   Create or edit `/path/to/veritasnews-project/.env` (the parent project directory) and add:
+   ```
+   GEMINI_API_KEY=your-actual-api-key-here
+   ```
+
+2. Install dependencies:
 ```bash
+cd services/summarization
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-2. Set your Gemini API key:
-```bash
-export GEMINI_API_KEY="your-api-key-here"
-```
+**Note**: The service automatically loads `GEMINI_API_KEY` from the project root `.env` file. You do NOT need to create a separate `.env` file in this directory.
 
 ### Running the Service
 

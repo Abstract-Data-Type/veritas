@@ -30,17 +30,21 @@ Returns summary
 
 ### Step 1: Set Up Environment Variables
 
-The project root should have a `.env` file with:
-```
+**CRITICAL**: Create a `.env` file in the **PROJECT ROOT** (not in subdirectories):
+
+```bash
+# In the project root directory (veritasnews-project/)
+cat > .env << 'EOF'
 GEMINI_API_KEY=your-actual-key-here
 SUMMARIZATION_SERVICE_URL=http://localhost:8000
+EOF
 ```
 
-If missing, create it:
-```bash
-cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY
-```
+**Important Notes:**
+- The `.env` file must be in the project root (`veritasnews-project/.env`)
+- Both the backend AND the summarization service read from this SAME `.env` file
+- Do NOT create separate `.env` files in subdirectories
+- Get a free Gemini API key from: https://aistudio.google.com/app/apikey
 
 ### Step 2: Install Dependencies
 

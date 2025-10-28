@@ -195,7 +195,17 @@ async def summarize_article(request: SummarizeRequest):
             
             if response.status_code == 200:
                 data = response.json()
-                return {"summary": data.get("summary", "")}
+                summary = data.get("summary", "").strip()
+                
+                # Validate that summary is not empty
+                if not summary:
+                    logger.error(f"Summarization service returned empty summary: {data}")
+                    raise HTTPException(
+                        status_code=502,
+                        detail="Summarization service returned empty summary"
+                    )
+                
+                return {"summary": summary}
             elif response.status_code >= 500:
                 logger.error(f"Summarization service error: {response.text}")
                 raise HTTPException(

@@ -1,0 +1,99 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perspectiva - Unbiased News</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header class="app-header">
+        <div class="container">
+            <h1>Perspectiva</h1>
+            <nav>
+                <a href="#" class="active">Home</a>
+                <a href="#">Topics</a>
+                <a href="#">Bookmarks</a>
+                <a href="#">About</a>
+            </nav>
+      
+
+    <!-- Move the theme toggle button here, inside the container -->
+    <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode">
+        <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+    </button>
+</div>
+</header>
+
+    <main class="container">
+        <section class="filters">
+            <div class="search-bar">
+                <input type="text" placeholder="Search for news...">
+                <button>Search</button>
+            </div>
+            <div class="topic-filters">
+                <button class="filter-btn active">All</button>
+                <button class="filter-btn">Politics</button>
+                <button class="filter-btn">Technology</button>
+                <button class="filter-btn">Health</button>
+                <button class="filter-btn">Business</button>
+                <button class="filter-btn">Science</button>
+            </div>
+        </section>
+
+        <section class="bias-legend">
+            <div class="legend-item">
+                <span class="legend-color left"></span>
+                <span>Left Leaning</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-color center"></span>
+                <span>Center</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-color right"></span>
+                <span>Right Leaning</span>
+            </div>
+        </section>
+
+        <section class="news-feed" id="newsFeed">
+            <!-- News articles will be dynamically inserted here -->
+        </section>
+
+        <!-- Add this inside the header, after the nav -->
+<button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode">
+    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+    </svg>
+</button>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>

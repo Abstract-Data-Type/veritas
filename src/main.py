@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .db.init_db import get_connection, init_db
 from .api.routes_bias_ratings import router as bias_ratings_router
 from loguru import logger
+from .db.sqlalchemy import init_database
 
 app = FastAPI(title="Veritas News API", version="1.0.0")
 
@@ -24,6 +25,8 @@ def startup_event():
     """Initialize database and log startup status."""
     conn = get_connection()
     init_db(conn)
+    # Initialize SQLAlchemy models/tables as well (coexists with sqlite3 usage)
+    init_database()
     logger.info("✅ Database initialized successfully.")
     logger.info("🚀 Application startup complete.")
 

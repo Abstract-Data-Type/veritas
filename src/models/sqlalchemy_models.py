@@ -61,6 +61,7 @@ class BiasRating(Base):
     bias_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     reasoning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     evaluated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    rating_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
     article: Mapped["Article"] = relationship("Article", back_populates="bias_ratings")

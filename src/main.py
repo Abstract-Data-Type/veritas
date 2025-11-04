@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .db.init_db import get_connection, init_db
+from .db.init_db import init_db
 from .api.routes_bias_ratings import router as bias_ratings_router
 from loguru import logger
 
@@ -22,9 +22,12 @@ app.include_router(bias_ratings_router, prefix="/bias_ratings", tags=["Bias Rati
 @app.on_event("startup")
 def startup_event():
     """Initialize database and log startup status."""
-    conn = get_connection()
-    init_db(conn)
-    logger.info("✅ Database initialized successfully.")
+    # Initialize all SQLAlchemy tables
+    success = init_db()
+    if success:
+        logger.info("✅ Database initialized successfully.")
+    else:
+        logger.error("❌ Database initialization failed.")
     logger.info("🚀 Application startup complete.")
 
 @app.get("/")

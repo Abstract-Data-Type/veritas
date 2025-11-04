@@ -1,19 +1,14 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from typing import List
-from sqlite3 import Connection
 import httpx
 import os
 from loguru import logger
 from pydantic import BaseModel
 
-from ..db.init_db import get_connection
-from ..db.bias_rating_db import (
-    get_all_bias_ratings,
-    get_bias_rating_by_id,
-    update_bias_rating,
-    bias_rating_exists
-)
+from sqlalchemy.orm import Session
+from ..db.sqlalchemy import get_session
+from ..models.sqlalchemy_models import BiasRating
 from ..models.bias_rating import (
     BiasRatingResponse,
     BiasRatingListResponse,
@@ -22,14 +17,8 @@ from ..models.bias_rating import (
 
 router = APIRouter()
 
-
-def get_db_connection() -> Connection:
-    """Dependency to get database connection"""
-    return get_connection()
-
-
 @router.get("/", response_model=BiasRatingListResponse)
-async def get_bias_ratings(conn: Connection = Depends(get_db_connection)):
+async def get_bias_ratings(db: Session = Depends(get_session)):
     """
     Retrieve all bias ratings
     
@@ -37,29 +26,28 @@ async def get_bias_ratings(conn: Connection = Depends(get_db_connection)):
         List of all bias ratings in the database
     """
     try:
-        ratings_data = get_all_bias_ratings(conn)
-        
-        # Convert to Pydantic models
-        ratings = [BiasRatingResponse(**rating) for rating in ratings_data]
-        
-        return BiasRatingListResponse(
-            ratings=ratings,
-            total=len(ratings)
+        records = (
+            db.query(BiasRating)
+            .order_by(BiasRating.evaluated_at.desc())
+            .all()
         )
-    
+        ratings = [
+            BiasRatingResponse(
+                rating_id=r.rating_id,
+                article_id=r.article_id,
+                bias_score=r.bias_score,
+                reasoning=r.reasoning,
+                evaluated_at=r.evaluated_at,
+            )
+            for r in records
+        ]
+        return BiasRatingListResponse(ratings=ratings, total=len(ratings))
     except Exception as e:
-        conn.close()  # Close connection on error
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to retrieve bias ratings: {str(e)}"
-        )
-    
-    # Close connection on successful completion
-    conn.close()
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve bias ratings: {str(e)}")
 
 
 @router.get("/{rating_id}", response_model=BiasRatingResponse)
-async def get_bias_rating(rating_id: int, conn: Connection = Depends(get_db_connection)):
+async def get_bias_rating(rating_id: int, db: Session = Depends(get_session)):
     """
     Retrieve a single bias rating by ID
     
@@ -73,33 +61,27 @@ async def get_bias_rating(rating_id: int, conn: Connection = Depends(get_db_conn
         HTTPException: If the bias rating is not found
     """
     try:
-        rating_data = get_bias_rating_by_id(conn, rating_id)
-        
-        if not rating_data:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Bias rating with ID {rating_id} not found"
-            )
-        
-        return BiasRatingResponse(**rating_data)
-    
+        r = db.query(BiasRating).filter(BiasRating.rating_id == rating_id).first()
+        if not r:
+            raise HTTPException(status_code=404, detail=f"Bias rating with ID {rating_id} not found")
+        return BiasRatingResponse(
+            rating_id=r.rating_id,
+            article_id=r.article_id,
+            bias_score=r.bias_score,
+            reasoning=r.reasoning,
+            evaluated_at=r.evaluated_at,
+        )
     except HTTPException:
-        # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to retrieve bias rating: {str(e)}"
-        )
-    finally:
-        conn.close()
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve bias rating: {str(e)}")
 
 
 @router.put("/{rating_id}", response_model=BiasRatingResponse)
 async def update_bias_rating_endpoint(
     rating_id: int, 
     rating_update: BiasRatingUpdate,
-    conn: Connection = Depends(get_db_connection)
+    db: Session = Depends(get_session)
 ):
     """
     Update an existing bias rating
@@ -115,49 +97,35 @@ async def update_bias_rating_endpoint(
         HTTPException: If the bias rating is not found or update fails
     """
     try:
-        # Check if the rating exists
-        if not bias_rating_exists(conn, rating_id):
-            raise HTTPException(
-                status_code=404,
-                detail=f"Bias rating with ID {rating_id} not found"
-            )
-        
-        # Validate bias_score range if provided
+        r = db.query(BiasRating).filter(BiasRating.rating_id == rating_id).first()
+        if not r:
+            raise HTTPException(status_code=404, detail=f"Bias rating with ID {rating_id} not found")
+
         if rating_update.bias_score is not None:
             if rating_update.bias_score < -1.0 or rating_update.bias_score > 1.0:
-                raise HTTPException(
-                    status_code=422,
-                    detail="Bias score must be between -1.0 and 1.0"
-                )
-        
-        # Update the rating
-        success = update_bias_rating(
-            conn,
-            rating_id,
-            bias_score=rating_update.bias_score,
-            reasoning=rating_update.reasoning
+                raise HTTPException(status_code=422, detail="Bias score must be between -1.0 and 1.0")
+
+        if rating_update.bias_score is not None:
+            r.bias_score = rating_update.bias_score
+        if rating_update.reasoning is not None:
+            r.reasoning = rating_update.reasoning
+
+        from datetime import datetime
+        r.evaluated_at = datetime.utcnow()
+        db.add(r)
+        db.commit()
+        db.refresh(r)
+        return BiasRatingResponse(
+            rating_id=r.rating_id,
+            article_id=r.article_id,
+            bias_score=r.bias_score,
+            reasoning=r.reasoning,
+            evaluated_at=r.evaluated_at,
         )
-        
-        if not success:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to update bias rating"
-            )
-        
-        # Return the updated rating
-        updated_rating = get_bias_rating_by_id(conn, rating_id)
-        return BiasRatingResponse(**updated_rating)
-    
     except HTTPException:
-        # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to update bias rating: {str(e)}"
-        )
-    finally:
-        conn.close()
+        raise HTTPException(status_code=500, detail=f"Failed to update bias rating: {str(e)}")
 
 
 class SummarizeRequest(BaseModel):
@@ -176,15 +144,12 @@ async def summarize_article(request: SummarizeRequest):
         JSON with summary field containing the generated summary
     """
     if not request.article_text or not request.article_text.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="article_text cannot be empty"
-        )
+        return JSONResponse(status_code=422, content={"detail": "article_text cannot be empty"})
     
     summarization_service_url = os.environ.get(
         "SUMMARIZATION_SERVICE_URL",
         "http://localhost:8000"
-    )
+    ).rstrip("/")
     
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -194,54 +159,48 @@ async def summarize_article(request: SummarizeRequest):
             )
             
             if response.status_code == 200:
-                data = response.json()
-                summary = data.get("summary", "").strip()
+                # Malformed JSON from upstream should surface as 502
+                try:
+                    data = response.json()
+                except Exception:
+                    logger.error("Summarization service returned invalid JSON")
+                    return JSONResponse(status_code=502, content={"detail": "Summarization service returned invalid JSON"})
+
+                # Ensure JSON has expected shape
+                if not isinstance(data, dict) or "summary" not in data:
+                    logger.error(f"Summarization service missing 'summary' key: {data}")
+                    return JSONResponse(status_code=502, content={"detail": "Summarization service returned empty summary"})
+
+                raw_summary = data.get("summary")
+                # Coerce to string in case upstream returns non-string
+                summary = str(raw_summary).strip() if raw_summary is not None else ""
                 
                 # Validate that summary is not empty
                 if not summary:
                     logger.error(f"Summarization service returned empty summary: {data}")
-                    raise HTTPException(
-                        status_code=502,
-                        detail="Summarization service returned empty summary"
-                    )
+                    return JSONResponse(status_code=502, content={"detail": "Summarization service returned empty summary"})
                 
                 return {"summary": summary}
             elif response.status_code >= 500:
                 logger.error(f"Summarization service error: {response.text}")
-                raise HTTPException(
-                    status_code=502,
-                    detail="Summary generation failed"
-                )
+                return JSONResponse(status_code=502, content={"detail": "Summary generation failed"})
             elif response.status_code >= 400:
                 # Forward client errors (4xx) with appropriate status
                 logger.warning(f"Client error from summarization service: {response.status_code} - {response.text}")
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid request to summarization service: {response.text}"
-                )
+                # Forward exact 422 when present, otherwise 400
+                forward_code = 422 if response.status_code == 422 else 400
+                return JSONResponse(status_code=forward_code, content={"detail": f"Invalid request to summarization service: {response.text}"})
             else:
                 # Unexpected status codes (e.g., 3xx redirects)
                 logger.error(f"Unexpected status code from summarization service: {response.status_code}")
-                raise HTTPException(
-                    status_code=502,
-                    detail="Unexpected response from summarization service"
-                )
+                return JSONResponse(status_code=502, content={"detail": "Unexpected response from summarization service"})
     
     except httpx.TimeoutException:
         logger.error("Summarization service timeout")
-        raise HTTPException(
-            status_code=504,
-            detail="Summarization service timeout"
-        )
+        return JSONResponse(status_code=504, content={"detail": "Summarization service timeout"})
     except httpx.RequestError as e:
         logger.error(f"Summarization service connection error: {e}")
-        raise HTTPException(
-            status_code=502,
-            detail="Cannot reach summarization service"
-        )
+        return JSONResponse(status_code=502, content={"detail": "Cannot reach summarization service"})
     except Exception as e:
         logger.error(f"Unexpected error in summarize endpoint: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error"
-        )
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})

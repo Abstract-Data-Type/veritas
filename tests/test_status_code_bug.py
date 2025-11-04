@@ -12,7 +12,7 @@ from src.main import app
 client = TestClient(app)
 
 
-def test_400_status_code_handling_bug():
+def test_400_status_code_forwarded():
     """
     BUG: When the summarization service returns a 400 (Bad Request),
     the backend doesn't handle it properly. The code only checks for:
@@ -46,17 +46,12 @@ def test_400_status_code_handling_bug():
             json={"article_text": "Test article"}
         )
         
-        # BUG: Returns 500 instead of properly handling 400
-        print(f"Status code: {response.status_code}")
-        print(f"Response: {response.json()}")
-        
-        # The bug is that 400 errors are not handled properly
-        # They should be forwarded as 400, not converted to 500
-        assert response.status_code == 500  # BUG: Should be 400
-        assert "Failed to generate summary" in response.json()["detail"]
+        # Correct behavior: 400 errors forwarded as 400
+        assert response.status_code == 400
+        assert "Invalid request to summarization service" in response.json()["detail"]
 
 
-def test_422_status_code_handling_bug():
+def test_422_status_code_forwarded():
     """
     BUG: Similar issue with 422 (Validation Error) from summarization service
     """
@@ -79,9 +74,9 @@ def test_422_status_code_handling_bug():
             json={"article_text": "Test article"}
         )
         
-        # BUG: Returns 500 instead of 422
-        assert response.status_code == 500  # BUG: Should be 422
-        print(f"BUG CONFIRMED: 422 from service returns as 500")
+        # Correct behavior: 422 forwarded as 422
+        assert response.status_code == 422
+        assert "Invalid request to summarization service" in response.json()["detail"]
 
 
 def test_500_status_code_handled_correctly():
@@ -107,7 +102,6 @@ def test_500_status_code_handled_correctly():
         
         # This should correctly return 502
         assert response.status_code == 502
-        print("500 errors correctly handled as 502")
 
 
 if __name__ == "__main__":

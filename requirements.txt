@@ -8,7 +8,7 @@ uvicorn[standard]==0.24.0
 # If you plan to use other databases, uncomment the relevant ones:
 # psycopg2-binary==2.9.9  # For PostgreSQL
 # pymysql==1.1.0          # For MySQL
-# sqlalchemy==2.0.23      # For ORM support
+sqlalchemy>=2.0.36      # For ORM support (2.0.36+ required for Python 3.13 compatibility)
 
 # HTTP Client (for making API requests to news sources)
 httpx==0.25.2

@@ -6,7 +6,6 @@ Fetches articles from stubbed sources and stores them in the database.
 """
 
 import asyncio
-import sqlite3
 import argparse
 import sys
 import httpx
@@ -14,8 +13,10 @@ import feedparser
 from datetime import datetime, timezone, timedelta
 from typing import List, Set
 from loguru import logger
+from sqlalchemy.orm import Session
 
 from ..db.init_db import get_connection, init_db
+from ..models.sqlalchemy_models import Article
 
 # Configuration
 POLL_INTERVAL = 30 * 60  # 30 minutes in seconds
@@ -159,13 +160,11 @@ class NewsWorker:
             logger.error(f"Error fetching CNN RSS feed: {e}")
             return []
     
-    def is_duplicate(self, conn: sqlite3.Connection, article: dict) -> bool:
+    def is_duplicate(self, db: Session, article: dict) -> bool:
         """Check if article already exists"""
-        cursor = conn.cursor()
-        
-        # Check by URL
-        cursor.execute("SELECT 1 FROM articles WHERE url = ?", (article["url"],))
-        if cursor.fetchone():
+        # Check by URL in database
+        existing = db.query(Article).filter(Article.url == article["url"]).first()
+        if existing:
             return True
         
         # Check in memory
@@ -174,32 +173,27 @@ class NewsWorker:
         
         return False
     
-    def store_article(self, conn: sqlite3.Connection, article: dict) -> bool:
+    def store_article(self, db: Session, article: dict) -> bool:
         """Store single article in database"""
         try:
-            cursor = conn.cursor()
-            
-            query = """
-            INSERT INTO articles (title, source, url, published_at, raw_text, created_at)
-            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """
-            
             # Handle None publication date with fallback
-            published_at_str = (
-                article["published_at"].isoformat() 
+            published_at = (
+                article["published_at"] 
                 if article["published_at"] 
-                else datetime.now(timezone.utc).isoformat()
+                else datetime.now(timezone.utc)
             )
             
-            cursor.execute(query, (
-                article["title"],
-                article["source"], 
-                article["url"],
-                published_at_str,
-                article["raw_text"]
-            ))
+            new_article = Article(
+                title=article["title"],
+                source=article["source"],
+                url=article["url"],
+                published_at=published_at,
+                raw_text=article["raw_text"],
+                created_at=datetime.now(timezone.utc)
+            )
             
-            conn.commit()
+            db.add(new_article)
+            db.commit()
             self.processed_urls.add(article["url"])
             
             logger.info(f"Stored: {article['title']}")
@@ -207,6 +201,7 @@ class NewsWorker:
             
         except Exception as e:
             logger.error(f"Error storing article: {e}")
+            db.rollback()
             return False
     
     def process_articles(self, articles: List[dict]) -> int:
@@ -214,18 +209,18 @@ class NewsWorker:
         if not articles:
             return 0
         
-        conn = get_connection()
-        stored_count = 0
-        
-        try:
-            for article in articles:
-                if not self.is_duplicate(conn, article):
-                    if self.store_article(conn, article):
-                        stored_count += 1
-                else:
-                    logger.debug(f"Duplicate skipped: {article['title']}")
-        finally:
-            conn.close()
+        with get_connection() as db:
+            stored_count = 0
+            
+            try:
+                for article in articles:
+                    if not self.is_duplicate(db, article):
+                        if self.store_article(db, article):
+                            stored_count += 1
+                    else:
+                        logger.debug(f"Duplicate skipped: {article['title']}")
+            except Exception as e:
+                logger.error(f"Error processing articles: {e}")
         
         logger.info(f"Stored {stored_count}/{len(articles)} articles")
         
@@ -273,87 +268,89 @@ class NewsWorker:
     
     def show_status(self):
         """Show current status"""
-        conn = get_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM articles")
-            total_articles = cursor.fetchone()[0]
-            
-            cursor.execute("""
-                SELECT title, source, created_at 
-                FROM articles 
-                ORDER BY created_at DESC 
-                LIMIT 5
-            """)
-            recent = cursor.fetchall()
-            
-            logger.info(f"=== Status ===")
-            logger.info(f"Total articles: {total_articles}")
-            logger.info(f"Running: {self.running}")
-            
-            if recent:
-                logger.info("Recent articles:")
-                for title, source, created_at in recent:
-                    logger.info(f"  - {title} ({source})")
-            
-        finally:
-            conn.close()
+        with get_connection() as db:
+            try:
+                total_articles = db.query(Article).count()
+                
+                recent = (
+                    db.query(Article.title, Article.source, Article.created_at)
+                    .order_by(Article.created_at.desc())
+                    .limit(5)
+                    .all()
+                )
+                
+                logger.info(f"=== Status ===")
+                logger.info(f"Total articles: {total_articles}")
+                logger.info(f"Running: {self.running}")
+                
+                if recent:
+                    logger.info("Recent articles:")
+                    for title, source, created_at in recent:
+                        logger.info(f"  - {title} ({source})")
+            except Exception as e:
+                logger.error(f"Error showing status: {e}")
     
     def show_all_articles(self):
         """Show all articles with details"""
-        conn = get_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT article_id, title, source, url, created_at 
-                FROM articles 
-                ORDER BY created_at DESC
-            """)
-            articles = cursor.fetchall()
-            
-            print(f"\n=== ALL ARTICLES ({len(articles)} total) ===")
-            for article_id, title, source, url, created_at in articles:
-                print(f"ID: {article_id}")
-                print(f"Title: {title}")
-                print(f"Source: {source}")
-                print(f"URL: {url}")
-                print(f"Created: {created_at}")
-                print("-" * 50)
-            
-        finally:
-            conn.close()
+        with get_connection() as db:
+            try:
+                articles = (
+                    db.query(
+                        Article.article_id,
+                        Article.title,
+                        Article.source,
+                        Article.url,
+                        Article.created_at
+                    )
+                    .order_by(Article.created_at.desc())
+                    .all()
+                )
+                
+                print(f"\n=== ALL ARTICLES ({len(articles)} total) ===")
+                for article_id, title, source, url, created_at in articles:
+                    print(f"ID: {article_id}")
+                    print(f"Title: {title}")
+                    print(f"Source: {source}")
+                    print(f"URL: {url}")
+                    print(f"Created: {created_at}")
+                    print("-" * 50)
+            except Exception as e:
+                logger.error(f"Error showing articles: {e}")
     
     def show_sources_summary(self):
         """Show summary by source"""
-        conn = get_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT source, COUNT(*) as count, MAX(created_at) as latest
-                FROM articles 
-                GROUP BY source 
-                ORDER BY count DESC
-            """)
-            sources = cursor.fetchall()
-            
-            print(f"\n=== SOURCES SUMMARY ===")
-            for source, count, latest in sources:
-                print(f"{source}: {count} articles (latest: {latest})")
-            
-        finally:
-            conn.close()
+        with get_connection() as db:
+            try:
+                from sqlalchemy import func
+                
+                sources = (
+                    db.query(
+                        Article.source,
+                        func.count(Article.article_id).label('count'),
+                        func.max(Article.created_at).label('latest')
+                    )
+                    .group_by(Article.source)
+                    .order_by(func.count(Article.article_id).desc())
+                    .all()
+                )
+                
+                print(f"\n=== SOURCES SUMMARY ===")
+                for source, count, latest in sources:
+                    print(f"{source}: {count} articles (latest: {latest})")
+            except Exception as e:
+                logger.error(f"Error showing sources summary: {e}")
     
     def clear_database(self):
         """Clear all articles (for testing)"""
-        conn = get_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM articles")
-            conn.commit()
-            self.processed_urls.clear()
-            logger.info("Database cleared")
-        finally:
-            conn.close()
+        with get_connection() as db:
+            try:
+                db.query(Article).delete()
+                db.commit()
+                self.processed_urls.clear()
+                logger.info("Database cleared")
+            except Exception as e:
+                logger.error(f"Error clearing database: {e}")
+                db.rollback()
     
     def cleanup_memory(self, max_urls: int = 1000):
         """Clean up processed_urls to prevent memory leak"""
@@ -384,9 +381,7 @@ async def main():
     logger.add(sys.stderr, level=log_level, format="{time} | {level} | {message}")
     
     # Initialize database
-    conn = get_connection()
-    init_db(conn)
-    conn.close()
+    init_db()
     
     worker = NewsWorker(hours_back=args.hours, limit=args.limit)
     

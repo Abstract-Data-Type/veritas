@@ -5,14 +5,18 @@ Tests all expected functionality and edge cases.
 """
 
 import pytest
-import sqlite3
 import asyncio
 import tempfile
 import os
+import uuid
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock, AsyncMock
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
 
 from src.worker.news_worker import NewsWorker, DEFAULT_HOURS_BACK, DEFAULT_ARTICLE_LIMIT
+from src.db.sqlalchemy import Base
+from src.models.sqlalchemy_models import Article
 
 
 class TestNewsWorkerCore:
@@ -20,15 +24,36 @@ class TestNewsWorkerCore:
     
     @pytest.fixture
     def temp_db(self):
-        """Create temporary database for testing"""
+        """Create temporary database for testing with SQLAlchemy"""
         fd, path = tempfile.mkstemp(suffix='.db')
         os.close(fd)
+        
+        # Create engine and tables
+        engine = create_engine(f'sqlite:///{path}')
+        
+        # Enable foreign key constraints
+        @event.listens_for(engine, "connect")
+        def set_sqlite_pragma(dbapi_conn, connection_record):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+        
+        Base.metadata.create_all(engine)
         
         old_db_path = os.environ.get('DB_PATH')
         os.environ['DB_PATH'] = path
         
+        # Store engine for cleanup
+        from src.db import sqlalchemy as sql_module
+        old_engine = sql_module.engine
+        sql_module.engine = engine
+        sql_module.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        
         yield path
         
+        # Cleanup
+        sql_module.engine = old_engine
+        engine.dispose()
         os.unlink(path)
         if old_db_path:
             os.environ['DB_PATH'] = old_db_path
@@ -75,80 +100,72 @@ class TestNewsWorkerCore:
     
     def test_duplicate_detection(self, temp_db, worker):
         """Test duplicate detection logic"""
-        from src.db.init_db import get_connection, init_db
+        from src.db.init_db import get_connection
         
-        conn = get_connection()
-        init_db(conn)
+        unique_url = f"https://test.com/{uuid.uuid4()}"
         
         article = {
             "title": "Test Article",
             "source": "Test Source",
-            "url": "https://test.com/article1",
+            "url": unique_url,
             "raw_text": "Test content",
             "published_at": datetime.now(timezone.utc)
         }
         
-        # First check - should not be duplicate
-        assert not worker.is_duplicate(conn, article)
-        
-        # Store the article
-        worker.store_article(conn, article)
+        with get_connection() as session:
+            # First check - should not be duplicate
+            assert not worker.is_duplicate(session, article)
+            
+            # Store the article
+            worker.store_article(session, article)
+            session.commit()
         
         # Second check - should be duplicate (in memory)
-        assert worker.is_duplicate(conn, article)
+        with get_connection() as session:
+            assert worker.is_duplicate(session, article)
         
         # Create new worker instance (no memory)
         new_worker = NewsWorker()
         
         # Should still detect duplicate (in database)
-        assert new_worker.is_duplicate(conn, article)
-        
-        conn.close()
+        with get_connection() as session:
+            assert new_worker.is_duplicate(session, article)
     
     def test_article_storage(self, temp_db, worker):
         """Test article storage functionality"""
-        from src.db.init_db import get_connection, init_db
+        from src.db.init_db import get_connection
         
-        conn = get_connection()
-        init_db(conn)
+        unique_url = f"https://test.com/{uuid.uuid4()}"
         
         article = {
             "title": "Test Article",
             "source": "Test Source",
-            "url": "https://test.com/article1",
+            "url": unique_url,
             "raw_text": "Test content",
             "published_at": datetime.now(timezone.utc)
         }
         
-        # Store article
-        result = worker.store_article(conn, article)
-        assert result is True
-        
-        # Verify it's in database
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM articles WHERE url = ?", (article["url"],))
-        stored_article = cursor.fetchone()
-        
-        assert stored_article is not None
-        assert stored_article[1] == article["title"]  # title
-        assert stored_article[2] == article["source"]  # source
-        assert stored_article[3] == article["url"]     # url
-        
-        conn.close()
+        with get_connection() as session:
+            # Store article
+            result = worker.store_article(session, article)
+            assert result is True
+            session.commit()
+            
+            # Verify it's in database
+            stored_article = session.query(Article).filter_by(url=article["url"]).first()
+            
+            assert stored_article is not None
+            assert stored_article.title == article["title"]
+            assert stored_article.source == article["source"]
+            assert stored_article.url == article["url"]
     
     def test_process_articles_batch(self, temp_db, worker):
         """Test processing a batch of articles"""
-        from src.db.init_db import get_connection, init_db
-        
-        conn = get_connection()
-        init_db(conn)
-        conn.close()
-        
         articles = [
             {
                 "title": f"Article {i}",
                 "source": "Test",
-                "url": f"https://test.com/{i}",
+                "url": f"https://test.com/{uuid.uuid4()}",
                 "raw_text": f"Content {i}",
                 "published_at": datetime.now(timezone.utc)
             }
@@ -165,18 +182,12 @@ class TestNewsWorkerCore:
     
     def test_status_and_summary_functions(self, temp_db, worker):
         """Test status and summary display functions"""
-        from src.db.init_db import get_connection, init_db
-        
-        conn = get_connection()
-        init_db(conn)
-        conn.close()
-        
         # Add some test articles
         articles = [
             {
                 "title": f"Article {i}",
                 "source": f"Source{i % 2}",  # Alternate sources
-                "url": f"https://test.com/{i}",
+                "url": f"https://test.com/{uuid.uuid4()}",
                 "raw_text": f"Content {i}",
                 "published_at": datetime.now(timezone.utc)
             }
@@ -198,12 +209,10 @@ class TestNewsWorkerCore:
         worker.clear_database()
         
         # Verify database is empty
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM articles")
-        count = cursor.fetchone()[0]
-        assert count == 0
-        conn.close()
+        from src.db.init_db import get_connection
+        with get_connection() as session:
+            count = session.query(Article).count()
+            assert count == 0
 
 
 class TestCNNScraper:
@@ -216,21 +225,26 @@ class TestCNNScraper:
     @pytest.mark.asyncio
     async def test_cnn_scraper_success(self, worker):
         """Test successful CNN RSS parsing"""
+        # Use recent timestamps
+        now = datetime.now(timezone.utc)
+        time1 = now - timedelta(hours=1)
+        time2 = now - timedelta(hours=2)
+        
         # Mock successful RSS response
-        mock_rss_content = '''<?xml version="1.0"?>
+        mock_rss_content = f'''<?xml version="1.0"?>
         <rss version="2.0">
             <channel>
                 <item>
                     <title>Test News Article 1</title>
                     <link>https://cnn.com/article1</link>
                     <description>Test content 1</description>
-                    <pubDate>Mon, 28 Oct 2024 12:00:00 GMT</pubDate>
+                    <pubDate>{time1.strftime('%a, %d %b %Y %H:%M:%S GMT')}</pubDate>
                 </item>
                 <item>
                     <title>Test News Article 2</title>
                     <link>https://cnn.com/article2</link>
                     <description>Test content 2</description>
-                    <pubDate>Mon, 28 Oct 2024 11:00:00 GMT</pubDate>
+                    <pubDate>{time2.strftime('%a, %d %b %Y %H:%M:%S GMT')}</pubDate>
                 </item>
             </channel>
         </rss>'''
@@ -301,21 +315,26 @@ class TestCNNScraper:
         """Test that article limit is enforced"""
         worker = NewsWorker(limit=1)  # Limit to 1 article
         
+        # Use recent timestamps
+        now = datetime.now(timezone.utc)
+        time1 = now - timedelta(minutes=30)
+        time2 = now - timedelta(minutes=45)
+        
         # Mock RSS with multiple articles
-        mock_rss_content = '''<?xml version="1.0"?>
+        mock_rss_content = f'''<?xml version="1.0"?>
         <rss version="2.0">
             <channel>
                 <item>
                     <title>Article 1</title>
                     <link>https://cnn.com/1</link>
                     <description>Content 1</description>
-                    <pubDate>Mon, 28 Oct 2024 12:00:00 GMT</pubDate>
+                    <pubDate>{time1.strftime('%a, %d %b %Y %H:%M:%S GMT')}</pubDate>
                 </item>
                 <item>
                     <title>Article 2</title>
                     <link>https://cnn.com/2</link>
                     <description>Content 2</description>
-                    <pubDate>Mon, 28 Oct 2024 11:00:00 GMT</pubDate>
+                    <pubDate>{time2.strftime('%a, %d %b %Y %H:%M:%S GMT')}</pubDate>
                 </item>
             </channel>
         </rss>'''
@@ -382,14 +401,36 @@ class TestErrorHandling:
     
     @pytest.fixture
     def temp_db(self):
+        """Create temporary database for testing with SQLAlchemy"""
         fd, path = tempfile.mkstemp(suffix='.db')
         os.close(fd)
+        
+        # Create engine and tables
+        engine = create_engine(f'sqlite:///{path}')
+        
+        # Enable foreign key constraints
+        @event.listens_for(engine, "connect")
+        def set_sqlite_pragma(dbapi_conn, connection_record):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+        
+        Base.metadata.create_all(engine)
         
         old_db_path = os.environ.get('DB_PATH')
         os.environ['DB_PATH'] = path
         
+        # Store engine for cleanup
+        from src.db import sqlalchemy as sql_module
+        old_engine = sql_module.engine
+        sql_module.engine = engine
+        sql_module.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        
         yield path
         
+        # Cleanup
+        sql_module.engine = old_engine
+        engine.dispose()
         os.unlink(path)
         if old_db_path:
             os.environ['DB_PATH'] = old_db_path
@@ -399,11 +440,6 @@ class TestErrorHandling:
     def test_malformed_article_data(self, temp_db):
         """Test handling of malformed article data"""
         worker = NewsWorker()
-        
-        from src.db.init_db import get_connection, init_db
-        conn = get_connection()
-        init_db(conn)
-        conn.close()
         
         # Test with missing fields
         malformed_articles = [

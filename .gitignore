@@ -55,3 +55,5 @@ htmlcov/
 # Services
 services/**/venv/
 services/**/__pycache__/
+
+veritas_news.db

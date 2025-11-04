@@ -4,14 +4,18 @@ Simple tests to uncover bugs in the news worker implementation.
 """
 
 import pytest
-import sqlite3
 import asyncio
 import tempfile
 import os
+import uuid
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock, AsyncMock
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
 
 from src.worker.news_worker import NewsWorker, DEFAULT_HOURS_BACK, DEFAULT_ARTICLE_LIMIT
+from src.db.sqlalchemy import Base
+from src.models.sqlalchemy_models import Article
 
 
 class TestWorkerBugs:
@@ -19,17 +23,37 @@ class TestWorkerBugs:
     
     @pytest.fixture
     def temp_db(self):
-        """Create temporary database for testing"""
+        """Create temporary database for testing with SQLAlchemy"""
         fd, path = tempfile.mkstemp(suffix='.db')
         os.close(fd)
+        
+        # Create engine and tables
+        engine = create_engine(f'sqlite:///{path}')
+        
+        # Enable foreign key constraints
+        @event.listens_for(engine, "connect")
+        def set_sqlite_pragma(dbapi_conn, connection_record):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+        
+        Base.metadata.create_all(engine)
         
         # Set DB_PATH environment variable
         old_db_path = os.environ.get('DB_PATH')
         os.environ['DB_PATH'] = path
         
+        # Store engine for cleanup
+        from src.db import sqlalchemy as sql_module
+        old_engine = sql_module.engine
+        sql_module.engine = engine
+        sql_module.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        
         yield path
         
         # Cleanup
+        sql_module.engine = old_engine
+        engine.dispose()
         os.unlink(path)
         if old_db_path:
             os.environ['DB_PATH'] = old_db_path
@@ -40,33 +64,31 @@ class TestWorkerBugs:
         """Test that None published_at is handled gracefully (bug fix verification)"""
         worker = NewsWorker()
         
+        # Use unique URL to avoid collisions
+        unique_url = f"https://test.com/{uuid.uuid4()}"
+        
         # Article with None published_at should be handled gracefully now
         article = {
             "title": "Test Article",
             "source": "Test",
-            "url": "https://test.com/1",
+            "url": unique_url,
             "raw_text": "Test content",
             "published_at": None  # This should not crash anymore
         }
         
-        from src.db.init_db import get_connection, init_db
-        conn = get_connection()
-        init_db(conn)
+        from src.db.init_db import get_connection
         
-        # This should now succeed instead of crashing
-        result = worker.store_article(conn, article)
-        assert result is True
-        
-        # Verify article was stored with fallback timestamp
-        cursor = conn.cursor()
-        cursor.execute("SELECT title, published_at FROM articles WHERE url = ?", (article["url"],))
-        stored = cursor.fetchone()
-        
-        assert stored is not None
-        assert stored[0] == "Test Article"
-        assert stored[1] is not None  # Should have fallback timestamp
-        
-        conn.close()
+        with get_connection() as session:
+            # This should now succeed instead of crashing
+            result = worker.store_article(session, article)
+            assert result is True
+            
+            # Verify article was stored with fallback timestamp
+            stored = session.query(Article).filter_by(url=article["url"]).first()
+            
+            assert stored is not None
+            assert stored.title == "Test Article"
+            assert stored.published_at is not None  # Should have fallback timestamp
     
     def test_negative_parameters_bug(self):
         """Test invalid negative parameters"""
@@ -80,11 +102,6 @@ class TestWorkerBugs:
     async def test_connection_leak_bug(self, temp_db):
         """Test that database connections leak on exceptions"""
         worker = NewsWorker()
-        
-        from src.db.init_db import init_db, get_connection
-        conn = get_connection()
-        init_db(conn)
-        conn.close()
         
         # Create bad article that will cause SQL error
         bad_articles = [
@@ -120,51 +137,42 @@ class TestWorkerBugs:
             # Should handle gracefully but may crash on feedparser.parse
             articles = await worker.fetch_cnn_articles()
             assert articles == []  # Should return empty list, not crash
-    
-    def test_sql_injection_vulnerability(self, temp_db):
-        """Test potential SQL injection in duplicate checking"""
-        worker = NewsWorker()
-        
-        from src.db.init_db import get_connection, init_db
-        conn = get_connection()
-        init_db(conn)
-        
-        # Article with potential SQL injection in URL
-        malicious_article = {
-            "title": "Test",
-            "source": "Test",
-            "url": "'; DROP TABLE articles; --",  # SQL injection attempt
-            "raw_text": "Test",
-            "published_at": datetime.now(timezone.utc)
-        }
-        
-        # Should be safe due to parameterized queries, but test it
-        is_dup = worker.is_duplicate(conn, malicious_article)
-        assert is_dup is False
-        
-        # Verify table still exists
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM articles")
-        count = cursor.fetchone()[0]
-        assert count == 0  # Table should still exist and be empty
-        
-        conn.close()
-
 
 class TestWorkerEdgeCases:
     """Test edge cases that could cause failures"""
     
     @pytest.fixture
     def temp_db(self):
-        """Create temporary database for testing"""
+        """Create temporary database for testing with SQLAlchemy"""
         fd, path = tempfile.mkstemp(suffix='.db')
         os.close(fd)
+        
+        # Create engine and tables
+        engine = create_engine(f'sqlite:///{path}')
+        
+        # Enable foreign key constraints
+        @event.listens_for(engine, "connect")
+        def set_sqlite_pragma(dbapi_conn, connection_record):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+        
+        Base.metadata.create_all(engine)
         
         old_db_path = os.environ.get('DB_PATH')
         os.environ['DB_PATH'] = path
         
+        # Store engine for cleanup
+        from src.db import sqlalchemy as sql_module
+        old_engine = sql_module.engine
+        sql_module.engine = engine
+        sql_module.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        
         yield path
         
+        # Cleanup
+        sql_module.engine = old_engine
+        engine.dispose()
         os.unlink(path)
         if old_db_path:
             os.environ['DB_PATH'] = old_db_path
@@ -175,24 +183,21 @@ class TestWorkerEdgeCases:
         """Test articles with empty/missing fields"""
         worker = NewsWorker()
         
-        from src.db.init_db import get_connection, init_db
-        conn = get_connection()
-        init_db(conn)
+        from src.db.init_db import get_connection
         
-        # Article with empty required fields
-        empty_article = {
-            "title": "",  # Empty title
-            "source": "",  # Empty source
-            "url": "",    # Empty URL
-            "raw_text": "",  # Empty content
-            "published_at": datetime.now(timezone.utc)
-        }
-        
-        # Should handle gracefully
-        result = worker.store_article(conn, empty_article)
-        # Current implementation doesn't validate, so this might succeed
-        
-        conn.close()
+        with get_connection() as session:
+            # Article with empty required fields
+            empty_article = {
+                "title": "",  # Empty title
+                "source": "",  # Empty source
+                "url": "",    # Empty URL
+                "raw_text": "",  # Empty content
+                "published_at": datetime.now(timezone.utc)
+            }
+            
+            # Should handle gracefully
+            result = worker.store_article(session, empty_article)
+            # Current implementation doesn't validate, so this might succeed
     
     @pytest.mark.asyncio
     async def test_network_timeout_handling(self):

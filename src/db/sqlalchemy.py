@@ -6,13 +6,17 @@ from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
 
-# Use a separate default DB file for SQLAlchemy to avoid conflicting with existing sqlite3 schema
+# Use the unified SQLite file by default; can be overridden via environment variables
 DB_URL = os.getenv(
     "SQLALCHEMY_DATABASE_URL",
-    f"sqlite:///{os.getenv('SQLALCHEMY_DB_PATH', 'veritas_news_sa.db')}"
+    f"sqlite:///{os.getenv('DB_PATH', 'veritas_news.db')}"
 )
 
-engine = create_engine(DB_URL, connect_args={"check_same_thread": False} if DB_URL.startswith("sqlite") else {})
+engine = create_engine(
+    DB_URL, 
+    connect_args={"check_same_thread": False} if DB_URL.startswith("sqlite") else {},
+    echo=False  # Set to True for SQL query logging during development
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -21,6 +25,12 @@ class Base(DeclarativeBase):
 
 
 def get_session() -> Generator[Session, None, None]:
+    """
+    Dependency function to get a database session for FastAPI endpoints.
+    
+    Yields:
+        Session: SQLAlchemy database session
+    """
     db = SessionLocal()
     try:
         yield db
@@ -29,7 +39,18 @@ def get_session() -> Generator[Session, None, None]:
 
 
 def init_database() -> None:
-    # Import models so they are registered with Base before create_all
-    from ..models.sqlalchemy_models import User, Article, Summary, BiasRating  # noqa: F401
+    """
+    Initialize the database by creating all tables defined in SQLAlchemy models.
+    This should be called on application startup.
+    """
+    # Import all models to ensure they're registered with Base.metadata
+    from ..models.sqlalchemy_models import (
+        User,
+        Article,
+        Summary,
+        BiasRating,
+        UserInteraction
+    )
 
+    # Create all tables
     Base.metadata.create_all(bind=engine)

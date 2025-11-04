@@ -12,7 +12,7 @@ from src.main import app
 client = TestClient(app)
 
 
-def test_empty_summary_returned_as_success():
+def test_empty_summary_is_rejected():
     """
     CRITICAL BUG: Backend returns 200 OK with empty summary when service
     returns malformed JSON without 'summary' field.
@@ -49,10 +49,10 @@ def test_empty_summary_returned_as_success():
         print(f"Status: {response.status_code}")
         print(f"Response: {response.json()}")
         
-        # BUG: Returns 200 with empty summary instead of error
-        assert response.status_code == 200
+        # Correct behavior: reject missing summary with 502
+        assert response.status_code == 502
         data = response.json()
-        assert data.get("summary") == ""  # Empty string!
+        assert "empty summary" in data.get("detail", "").lower()
         
         print("\n🐛 BUG CONFIRMED:")
         print("Backend returns 200 OK with empty summary when service")
@@ -60,7 +60,7 @@ def test_empty_summary_returned_as_success():
         print("This is a SILENT FAILURE - users get empty summary as 'success'")
 
 
-def test_empty_summary_string_returned_as_success():
+def test_empty_summary_string_is_rejected():
     """
     CRITICAL BUG: Backend returns 200 OK even when summary is explicitly empty string
     """
@@ -84,16 +84,16 @@ def test_empty_summary_string_returned_as_success():
             json={"article_text": "Test article"}
         )
         
-        # BUG: Returns 200 with empty summary
-        assert response.status_code == 200
-        assert response.json()["summary"] == ""
+        # Correct behavior: reject empty summary with 502
+        assert response.status_code == 502
+        assert "empty summary" in response.json().get("detail", "").lower()
         
         print("\n🐛 BUG CONFIRMED:")
         print("Backend accepts empty summary string as valid response")
         print("Should validate that summary is non-empty before returning success")
 
 
-def test_whitespace_only_summary_returned_as_success():
+def test_whitespace_only_summary_is_rejected():
     """
     CRITICAL BUG: Backend returns whitespace-only summary as success
     """
@@ -117,9 +117,9 @@ def test_whitespace_only_summary_returned_as_success():
             json={"article_text": "Test article"}
         )
         
-        # BUG: Returns 200 with whitespace summary
-        assert response.status_code == 200
-        assert response.json()["summary"].strip() == ""
+        # Correct behavior: reject whitespace-only summary with 502
+        assert response.status_code == 502
+        assert "empty summary" in response.json().get("detail", "").lower()
         
         print("\n🐛 BUG CONFIRMED:")
         print("Backend accepts whitespace-only summary as valid")

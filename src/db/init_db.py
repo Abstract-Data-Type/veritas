@@ -1,75 +1,55 @@
-import sqlite3
-from sqlite3 import Connection
-import os
+"""
+Database initialization module using SQLAlchemy.
+This replaces the old sqlite3-based init_db implementation.
+"""
+from contextlib import contextmanager
+from typing import Generator
+from sqlalchemy.orm import Session
+from .sqlalchemy import SessionLocal, engine, Base, get_session
+from loguru import logger
 
-DB_PATH = os.getenv("DB_PATH", "veritas_news.db")
 
-def get_connection() -> Connection:
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.execute("PRAGMA foreign_keys = ON;")
-    return conn
-
-def init_db(conn: Connection) -> bool:
+@contextmanager
+def get_connection() -> Generator[Session, None, None]:
     """
-    Initialize the database with required tables.
+    Get a SQLAlchemy database session (replaces old sqlite3 connection).
+    
+    This function maintains backwards compatibility with the old get_connection()
+    interface, but now returns a SQLAlchemy Session instead of a sqlite3 Connection.
+    
+    Yields:
+        Session: SQLAlchemy database session
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def init_db(db: Session = None) -> bool:
+    """
+    Initialize the database with required tables using SQLAlchemy.
     
     Args:
-        conn: SQLite database connection
+        db: Optional SQLAlchemy session (for backwards compatibility, but not used)
         
     Returns:
         bool: True if initialization was successful, False otherwise
     """
-    schema = """
-    CREATE TABLE IF NOT EXISTS users (
-        user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        email TEXT UNIQUE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS articles (
-        article_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        source TEXT,
-        url TEXT UNIQUE,
-        published_at DATETIME,
-        raw_text TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS summaries (
-        summary_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        article_id INTEGER NOT NULL,
-        summary_text TEXT NOT NULL,
-        generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (article_id) REFERENCES articles(article_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS bias_ratings (
-        rating_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        article_id INTEGER NOT NULL,
-        bias_score REAL,
-        reasoning TEXT,
-        evaluated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (article_id) REFERENCES articles(article_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS user_interactions (
-        interaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        article_id INTEGER NOT NULL,
-        action TEXT CHECK(action IN ('viewed', 'liked', 'bookmarked')),
-        interacted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(user_id),
-        FOREIGN KEY (article_id) REFERENCES articles(article_id)
-    );
-    """
     try:
-        conn.executescript(schema)
-        conn.commit()
+        # Import all models to ensure they're registered with Base.metadata
+        from ..models.sqlalchemy_models import (
+            User,
+            Article, 
+            Summary,
+            BiasRating
+        )
+        
+        # Create all tables defined in the models
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables created successfully")
         return True
     except Exception as e:
-        # Log the error (you might want to use a proper logger here)
-        print(f"Error initializing database: {e}")
-        conn.rollback()
+        logger.error(f"Error initializing database: {e}")
         return False

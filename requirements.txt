@@ -1,54 +1,67 @@
-# Web Framework
-fastapi==0.104.1
-
-# ASGI Server for production
-uvicorn[standard]==0.24.0
-
-# Database (SQLite is built-in to Python, but you might want additional packages)
-# If you plan to use other databases, uncomment the relevant ones:
-# psycopg2-binary==2.9.9  # For PostgreSQL
-# pymysql==1.1.0          # For MySQL
-sqlalchemy>=2.0.36      # For ORM support (2.0.36+ required for Python 3.13 compatibility)
-
-# HTTP Client (for making API requests to news sources)
-httpx==0.25.2
-requests==2.31.0
-
-# Environment variable management
-python-dotenv==1.0.0
-
-# Web scraping (for news article extraction)
+aiosqlite==0.19.0
+annotated-types==0.7.0
+anyio==3.7.1
+bcrypt==5.0.0
 beautifulsoup4==4.12.2
-
-# Natural Language Processing (for bias analysis and summarization)
-nltk==3.8.1
-textblob==0.17.1
-
-# Google Gemini API (for article summarization)
+black==23.11.0
+cachetools==6.2.1
+certifi==2025.10.5
+cffi==2.0.0
+charset-normalizer==3.4.4
+click==8.3.0
+cryptography==46.0.3
+ecdsa==0.19.1
+fastapi==0.104.1
+feedparser==6.0.11
+flake8==6.1.0
+google-auth==2.41.1
 google-genai==0.3.0
-
-# Date and time handling
-python-dateutil==2.8.2
-
-# Logging
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.7.1
+httpx==0.25.2
+idna==3.11
+iniconfig==2.3.0
+isort==5.12.0
+joblib==1.5.2
 loguru==0.7.2
-
-# Testing (development dependencies)
+mccabe==0.7.0
+mypy_extensions==1.1.0
+newsapi-python==0.2.7
+nltk==3.8.1
+packaging==25.0
+passlib==1.7.4
+pathspec==0.12.1
+pillow==11.3.0
+platformdirs==4.5.0
+pluggy==1.6.0
+pyasn1==0.6.1
+pyasn1_modules==0.4.2
+pycodestyle==2.11.1
+pycparser==2.23
+pydantic==2.12.3
+pydantic_core==2.41.4
+pyflakes==3.1.0
 pytest==7.4.3
 pytest-asyncio==0.21.1
-httpx==0.25.2  # Already listed above, used for testing FastAPI endpoints
-
-# Code formatting and linting (development dependencies)
-black==23.11.0
-flake8==6.1.0
-isort==5.12.0
-
-# Security
-passlib[bcrypt]==1.7.4  # For password hashing if you implement user authentication
-python-jose[cryptography]==3.3.0  # For JWT tokens
-
-# RSS Feed parsing (for news aggregation)
-feedparser==6.0.11
-
-# Async database support (if needed)
-aiosqlite==0.19.0
+python-dateutil==2.8.2
+python-dotenv==1.0.0
+python-jose==3.3.0
+PyYAML==6.0.3
+regex==2025.10.23
+requests==2.31.0
+rsa==4.9.1
+sgmllib3k==1.0.0
+six==1.17.0
+sniffio==1.3.1
+soupsieve==2.8
+starlette==0.27.0
+textblob==0.17.1
+tqdm==4.67.1
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+urllib3==2.5.0
+uvicorn==0.24.0
+uvloop==0.22.1
+watchfiles==1.1.1
+websockets==14.2

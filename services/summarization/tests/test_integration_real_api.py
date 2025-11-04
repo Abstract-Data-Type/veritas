@@ -3,8 +3,10 @@ Real Integration Test - Makes Actual Gemini API Calls
 
 WARNING: This test makes real API calls to Gemini and will incur costs.
 Run this only when you want to verify the actual integration works.
+Requires GEMINI_API_KEY to be set in environment.
 """
 import os
+import pytest
 import sys
 from pathlib import Path
 from fastapi.testclient import TestClient
@@ -21,20 +23,23 @@ if env_path.exists():
 
 import main
 
-client = TestClient(main.app)
 
-
-def test_real_rate_bias_api_call():
-    """Make a REAL API call to Gemini and verify the response"""
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not os.environ.get("GEMINI_API_KEY"),
+    reason="GEMINI_API_KEY not set - skipping real API integration test"
+)
+def test_rate_bias_real_api_integration():
+    """
+    Integration test that makes real API calls to Gemini.
     
-    # Check if API key is available
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        print("⚠️  GEMINI_API_KEY not found. Skipping real API test.")
-        return
-    
-    print(f"✓ GEMINI_API_KEY found (length: {len(api_key)} chars)")
-    print()
+    Verifies:
+    - Endpoint returns 200 OK
+    - All 4 bias dimensions are present in response
+    - All scores are in valid range (1.0 - 7.0)
+    - Response structure matches expected schema
+    """
+    client = TestClient(main.app)
     
     # Test article - a simple news-like text
     test_article = """
@@ -46,75 +51,42 @@ def test_real_rate_bias_api_call():
     for consideration.
     """
     
-    print("=" * 70)
-    print("REAL INTEGRATION TEST - Making Actual Gemini API Calls")
-    print("=" * 70)
-    print()
-    print(f"Article text (first 100 chars): {test_article[:100]}...")
-    print()
-    print("Calling /rate-bias endpoint (this will make 4 parallel Gemini API calls)...")
-    print()
+    resp = client.post(
+        "/rate-bias",
+        json={"article_text": test_article.strip()}
+    )
     
-    try:
-        resp = client.post(
-            "/rate-bias",
-            json={"article_text": test_article.strip()}
-        )
-        
-        print(f"Response Status: {resp.status_code}")
-        print()
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            print("✅ SUCCESS! Real API calls worked!")
-            print()
-            print("Response:")
-            print(f"  AI Model: {data.get('ai_model')}")
-            print()
-            print("Bias Scores:")
-            scores = data.get('scores', {})
-            for dimension, score in scores.items():
-                print(f"  {dimension}: {score:.2f}")
-            print()
-            
-            # Verify all dimensions are present
-            expected_dims = {'partisan_bias', 'affective_bias', 'framing_bias', 'sourcing_bias'}
-            actual_dims = set(scores.keys())
-            if actual_dims == expected_dims:
-                print("✅ All 4 bias dimensions returned")
-            else:
-                print(f"⚠️  Missing dimensions: {expected_dims - actual_dims}")
-            
-            # Verify scores are in valid range
-            all_valid = all(1.0 <= score <= 7.0 for score in scores.values())
-            if all_valid:
-                print("✅ All scores in valid range (1.0 - 7.0)")
-            else:
-                print("⚠️  Some scores outside valid range!")
-                for dim, score in scores.items():
-                    if not (1.0 <= score <= 7.0):
-                        print(f"    {dim}: {score} (INVALID)")
-            
-            print()
-            print("=" * 70)
-            print("✅ REAL INTEGRATION TEST PASSED")
-            print("=" * 70)
-            
-            return True
-        else:
-            print(f"❌ FAILED: Status {resp.status_code}")
-            print(f"Error: {resp.json()}")
-            return False
-            
-    except Exception as e:
-        print(f"❌ ERROR: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-if __name__ == "__main__":
-    print()
-    test_real_rate_bias_api_call()
-    print()
-
+    # Assert successful response
+    assert resp.status_code == 200, f"Expected 200 OK, got {resp.status_code}: {resp.json()}"
+    
+    data = resp.json()
+    
+    # Assert response structure
+    assert "scores" in data, "Response missing 'scores' field"
+    assert "ai_model" in data, "Response missing 'ai_model' field"
+    assert data["ai_model"] == "gemini-2.5-flash", f"Expected 'gemini-2.5-flash', got '{data['ai_model']}'"
+    
+    scores = data["scores"]
+    
+    # Assert all expected dimensions are present
+    expected_dimensions = {"partisan_bias", "affective_bias", "framing_bias", "sourcing_bias"}
+    actual_dimensions = set(scores.keys())
+    assert actual_dimensions == expected_dimensions, \
+        f"Missing dimensions: {expected_dimensions - actual_dimensions}, " \
+        f"Unexpected dimensions: {actual_dimensions - expected_dimensions}"
+    
+    # Assert all scores are valid floats in range 1.0-7.0
+    for dimension, score in scores.items():
+        assert isinstance(score, (int, float)), \
+            f"Score for {dimension} must be numeric, got {type(score)}"
+        assert 1.0 <= float(score) <= 7.0, \
+            f"Score for {dimension} must be between 1.0 and 7.0, got {score}"
+    
+    # Assert all scores are present (not None)
+    assert all(score is not None for score in scores.values()), \
+        "Some scores are None"
+    
+    # Assert scores are reasonable (not all identical, indicating potential issues)
+    unique_scores = set(scores.values())
+    assert len(unique_scores) > 1 or len(unique_scores) == len(scores), \
+        "All scores are identical - may indicate an issue with API responses"

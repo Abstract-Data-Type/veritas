@@ -100,7 +100,7 @@ Article text:
     
     generate_content_config = types.GenerateContentConfig(
         temperature=temperature,
-        max_output_tokens=20,  # Small value for single number responses
+        max_output_tokens=2000,  # High limit to ensure all prompts work regardless of length or complexity
     )
     
     result = client.models.generate_content(
@@ -109,7 +109,17 @@ Article text:
         config=generate_content_config
     )
     
-    response_text = (result.text or "").strip()
+    # Extract text from result - handle both result.text and candidate.content.parts
+    response_text = result.text
+    if not response_text and result.candidates:
+        # Fallback: extract text from candidate parts if result.text is None
+        candidate = result.candidates[0]
+        if candidate.content and candidate.content.parts:
+            text_parts = [part.text for part in candidate.content.parts if hasattr(part, 'text') and part.text]
+            if text_parts:
+                response_text = " ".join(text_parts)
+    
+    response_text = (response_text or "").strip()
     if not response_text:
         raise RuntimeError("Empty response from Gemini API")
     

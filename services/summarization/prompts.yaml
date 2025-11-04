@@ -1,0 +1,39 @@
+dimensions:
+  - name: partisan_bias
+    prompt: |
+      On a scale of 1-7, does this article explicitly favor or criticize specific political parties, politicians, or ideologies?
+      This measures direct political alignment - does the article take sides with or against specific political entities or belief systems?
+      1 = Strongly favors/criticizes the Left (explicit support for left-leaning parties/ideologies or criticism of right-leaning ones)
+      4 = Neutral / No explicit partisan alignment
+      7 = Strongly favors/criticizes the Right (explicit support for right-leaning parties/ideologies or criticism of left-leaning ones)
+      
+      Respond with only a single number between 1 and 7.
+
+  - name: affective_bias
+    prompt: |
+      On a scale of 1-7, how emotionally charged or inflammatory is the language used in the article?
+      1 = Strictly neutral, objective tone
+      4 = Moderately emotive language
+      7 = Highly emotional, loaded language
+      
+      Respond with only a single number between 1 and 7.
+
+  - name: framing_bias
+    prompt: |
+      On a scale of 1-7, how does the article frame the narrative, angle, and emphasis of the story?
+      This measures presentation style - what aspects are highlighted vs. de-emphasized, what angle is taken, and what perspective dominates the narrative structure?
+      1 = Framing strongly favors left-leaning perspectives (emphasizes left-leaning concerns, angles, or narrative approaches)
+      4 = Uses neutral, balanced framing with multiple perspectives
+      7 = Framing strongly favors right-leaning perspectives (emphasizes right-leaning concerns, angles, or narrative approaches)
+      
+      Respond with only a single number between 1 and 7.
+
+  - name: sourcing_bias
+    prompt: |
+      On a scale of 1-7, how diverse are the sources and viewpoints quoted or referenced in the article?
+      1 = Sources are from one-sided or uniform perspectives
+      4 = Some diversity in sources
+      7 = Wide diversity of sources and viewpoints
+      
+      Respond with only a single number between 1 and 7.
+

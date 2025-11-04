@@ -7,6 +7,7 @@ Fetches articles from stubbed sources and stores them in the database.
 
 import asyncio
 import argparse
+import os
 import sys
 import httpx
 import feedparser
@@ -14,6 +15,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Set
 from loguru import logger
 from sqlalchemy.orm import Session
+from newsapi import NewsApiClient
 
 from ..db.init_db import get_connection, init_db
 from ..models.sqlalchemy_models import Article
@@ -160,6 +162,82 @@ class NewsWorker:
             logger.error(f"Error fetching CNN RSS feed: {e}")
             return []
     
+    async def fetch_newsapi_headlines(self) -> List[dict]:
+        """Fetch top headlines from NewsAPI for US in English"""
+        logger.info(f"Fetching NewsAPI headlines, limit {self.limit}")
+        
+        try:
+            # Get API key from environment
+            api_key = os.getenv('NEWSCLIENT_API_KEY')
+            if not api_key:
+                logger.error("NEWSCLIENT_API_KEY environment variable not set")
+                return []
+            
+            # Initialize NewsAPI client
+            newsapi = NewsApiClient(api_key=api_key)
+            
+            # Rate limiting - be respectful to API
+            await asyncio.sleep(1.0)
+            
+            # Fetch top headlines for US in English
+            logger.debug(f"Fetching US headlines with limit {self.limit}")
+            response = newsapi.get_top_headlines(
+                country='us',
+                language='en',
+                page_size=min(self.limit, 100)  # API max is 100
+            )
+            
+            if response['status'] != 'ok':
+                logger.error(f"NewsAPI error: {response.get('message', 'Unknown error')}")
+                return []
+            
+            articles_data = response.get('articles', [])
+            logger.debug(f"NewsAPI returned {len(articles_data)} articles")
+            
+            if not articles_data:
+                logger.warning("No articles returned from NewsAPI")
+                return []
+            
+            # Transform articles to our format
+            articles = []
+            for article_data in articles_data:
+                try:
+                    # Parse publication date
+                    published_at = None
+                    if article_data.get('publishedAt'):
+                        # NewsAPI returns ISO format: "2023-12-01T10:30:00Z"
+                        published_at = datetime.fromisoformat(
+                            article_data['publishedAt'].replace('Z', '+00:00')
+                        )
+                    
+                    # Map to our article format
+                    article = {
+                        "title": article_data.get('title', 'No Title').strip(),
+                        "source": article_data.get('source', {}).get('name', 'NewsAPI'),
+                        "url": article_data.get('url', '').strip(),
+                        "raw_text": article_data.get('description', 'No description available').strip(),
+                        "published_at": published_at or datetime.now(timezone.utc)
+                    }
+                    
+                    # Skip if no URL
+                    if not article["url"]:
+                        logger.debug("Skipping article with no URL")
+                        continue
+                    
+                    articles.append(article)
+                    logger.debug(f"Added NewsAPI article: {article['title']}")
+                    
+                except Exception as e:
+                    logger.error(f"Error parsing NewsAPI article: {e}")
+                    continue
+            
+            logger.info(f"Fetched {len(articles)} NewsAPI headlines")
+            return articles
+            
+        except Exception as e:
+            logger.error(f"Error fetching NewsAPI headlines: {e}")
+            return []
+    
     def is_duplicate(self, db: Session, article: dict) -> bool:
         """Check if article already exists"""
         # Check by URL in database
@@ -229,9 +307,12 @@ class NewsWorker:
         
         return stored_count
     
-    async def run_single_fetch(self, use_cnn: bool = False) -> int:
+    async def run_single_fetch(self, use_cnn: bool = False, use_newsapi: bool = False) -> int:
         """Run one fetch cycle"""
-        if use_cnn:
+        if use_newsapi:
+            logger.info("Running single fetch with NewsAPI")
+            articles = await self.fetch_newsapi_headlines()
+        elif use_cnn:
             logger.info("Running single fetch with CNN scraper")
             articles = await self.fetch_cnn_articles()
         else:
@@ -366,6 +447,7 @@ async def main():
     parser = argparse.ArgumentParser(description="News Worker")
     parser.add_argument("--once", action="store_true", help="Run single fetch")
     parser.add_argument("--cnn", action="store_true", help="Use CNN scraper instead of stubs")
+    parser.add_argument("--newsapi", action="store_true", help="Use NewsAPI for headlines")
     parser.add_argument("--hours", type=int, default=DEFAULT_HOURS_BACK, help=f"Hours back to fetch (default: {DEFAULT_HOURS_BACK})")
     parser.add_argument("--limit", type=int, default=DEFAULT_ARTICLE_LIMIT, help=f"Max articles to fetch (default: {DEFAULT_ARTICLE_LIMIT})")
     parser.add_argument("--status", action="store_true", help="Show status")
@@ -395,7 +477,7 @@ async def main():
         elif args.clear:
             worker.clear_database()
         elif args.once:
-            count = await worker.run_single_fetch(use_cnn=args.cnn)
+            count = await worker.run_single_fetch(use_cnn=args.cnn, use_newsapi=args.newsapi)
             logger.info(f"Single fetch complete: {count} articles stored")
         else:
             await worker.run_scheduler()

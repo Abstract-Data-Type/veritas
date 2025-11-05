@@ -36,73 +36,96 @@ document.addEventListener('DOMContentLoaded', function() {
             id: 1,
             title: "Climate Change Agreement Reached at Global Summit",
             summary: "World leaders have agreed on new climate targets that aim to reduce carbon emissions by 50% by 2030. The agreement includes provisions for developed nations to assist developing countries in their transition to renewable energy sources.",
-            source: "Global News Network",
             sourceLogo: "https://via.placeholder.com/20",
             image: "https://source.unsplash.com/random/600x400/?climate",
             date: "2 hours ago",
             bias: "left",
             biasScore: -0.7,
-            saved: false
+            saved: false,
+            politicalSpectrum: {
+                economic: -0.6,  // Left-leaning on economics
+                social: 0.4      // Slightly authoritarian
+            }
         },
         {
             id: 2,
             title: "New Study Questions Climate Change Consensus",
-            summary: "A peer-reviewed study suggests that climate models may have overestimated the impact of carbon emissions on global temperatures. The research has sparked debate among scientists about the urgency of climate policies.",
-            source: "Daily Chronicle",
+            summary: "A peer-reviewed study suggests that climate models may have overestimated the impact of carbon emissions on global temperatures. The research has sparked debate among scientist about the urgency of climate policies.",
+            source: "National Report",
             sourceLogo: "https://via.placeholder.com/20",
-            image: "https://source.unsplash.com/random/600x400/?research,lab",
+            image: "https://source.unsplash.com/random/600x400/?science",
             date: "5 hours ago",
             bias: "right",
             biasScore: 0.6,
-            saved: false
+            saved: false,
+            politicalSpectrum: {
+                economic: 0.7,   // Right-leaning on economics
+                social: 0.5      // Somewhat authoritarian
+            }
         },
         {
             id: 3,
             title: "Tech Giant Unveils Revolutionary AI Assistant",
-            summary: "The new AI assistant can understand and respond to complex queries with human-like understanding. Early tests show it outperforming existing models in both accuracy and response time.",
+            summary: "The new AI assistant can understand and respond to complex queries with human-like understanding. Experts say this represents a significant leap forward in natural language processing technology.",
             source: "Tech Today",
             sourceLogo: "https://via.placeholder.com/20",
-            image: "https://source.unsplash.com/random/600x400/?ai,technology",
+            image: "https://source.unsplash.com/random/600x400/?ai",
             date: "1 day ago",
             bias: "center",
             biasScore: 0.1,
-            saved: true
+            saved: true,
+            politicalSpectrum: {
+                economic: 0.2,   // Slightly right on economics
+                social: -0.3     // Somewhat libertarian
+            }
         },
         {
             id: 4,
-            title: "Stock Markets Reach All-Time High",
-            summary: "Global markets surged to record levels today following positive economic indicators and strong corporate earnings. Analysts remain cautiously optimistic about sustained growth.",
+            title: "Stock Market Reaches All-Time High",
+            summary: "The S&P 500 hit a new record high today, driven by strong earnings reports from major tech companies. Analysts remain optimistic about the market's performance for the rest of the year.",
             source: "Financial Times",
             sourceLogo: "https://via.placeholder.com/20",
-            image: "https://source.unsplash.com/random/600x400/?stock,market",
+            image: "https://source.unsplash.com/random/600x400/?stock-market",
             date: "3 hours ago",
             bias: "center",
-            biasScore: -0.2,
-            saved: false
+            biasScore: 0.2,
+            saved: false,
+            politicalSpectrum: {
+                economic: 0.8,   // Strongly right on economics
+                social: 0.1      // Neutral on social issues
+            }
         },
         {
             id: 5,
-            title: "Healthcare Reform Bill Passes Senate",
-            summary: "The Senate approved a sweeping healthcare reform bill that aims to lower prescription drug costs and expand coverage. The bill now moves to the House where it faces an uncertain future.",
-            source: "National Report",
+            title: "New Healthcare Bill Faces Opposition",
+            summary: "Proposed healthcare legislation has drawn criticism from both sides of the aisle, with progressives calling for more comprehensive coverage and conservatives concerned about costs. The bill's future remains uncertain as negotiations continue.",
+            source: "Capital Journal",
             sourceLogo: "https://via.placeholder.com/20",
-            image: "https://source.unsplash.com/random/600x400/?healthcare,doctor",
-            date: "1 day ago",
-            bias: "left",
-            biasScore: -0.8,
-            saved: false
+            image: "https://source.unsplash.com/random/600x400/?healthcare",
+            date: "7 hours ago",
+            bias: "center",
+            biasScore: 0,
+            saved: false,
+            politicalSpectrum: {
+                economic: -0.3,  // Slightly left on economics
+                social: -0.1     // Slightly libertarian
+            }
         },
         {
             id: 6,
-            title: "Border Security Bill Gains Bipartisan Support",
-            summary: "Lawmakers from both parties have reached a compromise on border security funding. The deal includes increased funding for border patrol and new processing centers for asylum seekers.",
-            source: "Capital Journal",
+            title: "Breakthrough in Renewable Energy Storage",
+            summary: "Scientists have developed a new battery technology that could make renewable energy more viable by solving the storage problem. The innovation could accelerate the transition away from fossil fuels.",
+            source: "Eco News",
             sourceLogo: "https://via.placeholder.com/20",
-            image: "https://source.unsplash.com/random/600x400/?border,security",
-            date: "4 hours ago",
-            bias: "right",
-            biasScore: 0.5,
-            saved: false
+            image: "https://source.unsplash.com/random/600x400/?renewable-energy",
+            date: "1 day ago",
+            bias: "left",
+            biasScore: -0.5,
+            saved: true,
+            politicalSpectrum: {
+                economic: -0.7,  // Strongly left on economics
+                social: -0.6     // Strongly libertarian
+            }
         }
     ];
 
@@ -113,9 +136,19 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderArticles(articlesToRender) {
         newsFeed.innerHTML = '';
         
+        // Load the political spectrum script if not already loaded
+        if (!window.PoliticalSpectrum) {
+            const script = document.createElement('script');
+            script.src = 'spectrum-graph.js';
+            document.head.appendChild(script);
+        }
+        
         articlesToRender.forEach(article => {
             const biasClass = getBiasClass(article.biasScore);
             const biasText = getBiasText(article.biasScore);
+            
+            // Generate a unique ID for the spectrum container
+            const spectrumId = `spectrum-${article.id}`;
             
             const articleElement = document.createElement('article');
             articleElement.className = `article-card`;
@@ -129,6 +162,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     <span class="article-bias ${biasClass}">${biasText}</span>
                     <h3 class="article-title">${article.title}</h3>
                     <p class="article-summary">${article.summary}</p>
+                    
+                    <!-- Political Spectrum Graph -->
+                    <div class="spectrum-section">
+                        <h4>Political Spectrum Analysis</h4>
+                        <div id="${spectrumId}" class="spectrum-container"></div>
+                        <p class="spectrum-note">This analysis is based on the article's content and language patterns.</p>
+                    </div>
+                    
                     <div class="article-meta">
                         <span>${article.date}</span>
                         <div class="article-actions">
@@ -152,6 +193,27 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
             
             newsFeed.appendChild(articleElement);
+            
+            // Initialize political spectrum graph for this article
+            if (window.PoliticalSpectrum && article.politicalSpectrum) {
+                const spectrumId = `spectrum-${article.id}`;
+                const container = document.getElementById(spectrumId);
+                if (container) {
+                    // Small delay to ensure the DOM is ready
+                    setTimeout(() => {
+                        try {
+                            const spectrum = new PoliticalSpectrum(container, {
+                                economicPosition: article.politicalSpectrum.economic,
+                                socialPosition: article.politicalSpectrum.social,
+                                showLabels: true,
+                                interactive: true
+                            });
+                        } catch (e) {
+                            console.error('Error initializing political spectrum:', e);
+                        }
+                    }, 100);
+                }
+            }
         });
 
         // Add event listeners to save buttons

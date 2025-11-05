@@ -422,3 +422,6 @@ body {
 .article-card:nth-child(4) { animation-delay: 0.4s; }
 .article-card:nth-child(5) { animation-delay: 0.5s; }
 .article-card:nth-child(6) { animation-delay: 0.6s; }
+
+
+/* Add this to your styles.css */

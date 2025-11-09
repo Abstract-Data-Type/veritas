@@ -1,6 +1,7 @@
 """
 Debug Integration Test - Detailed output of what's happening
 """
+
 import os
 import sys
 from pathlib import Path
@@ -10,6 +11,7 @@ project_root = Path(__file__).parent.parent.parent.parent
 env_path = project_root / ".env"
 if env_path.exists():
     from dotenv import load_dotenv
+
     load_dotenv(dotenv_path=env_path)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -51,34 +53,32 @@ try:
             parts=[types.Part.from_text(text=test_prompt)],
         )
     ]
-    
+
     generate_content_config = types.GenerateContentConfig(
         temperature=0.1,
         max_output_tokens=20,
     )
-    
+
     print("Calling generate_content...")
     result = client.models.generate_content(
-        model=model,
-        contents=contents,
-        config=generate_content_config
+        model=model, contents=contents, config=generate_content_config
     )
-    
+
     print(f"✓ API call succeeded!")
     print(f"Response type: {type(result)}")
     print(f"Response text: '{result.text}'")
     print(f"Response text type: {type(result.text)}")
     print(f"Response text length: {len(result.text) if result.text else 0}")
-    
-    if hasattr(result, 'candidates'):
+
+    if hasattr(result, "candidates"):
         print(f"Has candidates: {hasattr(result, 'candidates')}")
-        if hasattr(result, 'candidates') and result.candidates:
+        if hasattr(result, "candidates") and result.candidates:
             print(f"Candidates count: {len(result.candidates)}")
             if result.candidates:
                 print(f"First candidate: {result.candidates[0]}")
-    
+
 except Exception as e:
     print(f"❌ ERROR: {str(e)}")
     import traceback
-    traceback.print_exc()
 
+    traceback.print_exc()

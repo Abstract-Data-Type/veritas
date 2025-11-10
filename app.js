@@ -239,9 +239,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Don't navigate if the click was on a button
                 if (!e.target.closest('button')) {
                     const articleId = articlesToRender[index].id;
-                    // In a real app, you would navigate to the article detail page
-                    console.log(`Navigating to article ${articleId}`);
-                    // window.location.href = `/article/${articleId}`;
+                    // Navigate to article detail page
+                    window.location.href = `article-detail.html?id=${articleId}`;
                 }
             });
         });

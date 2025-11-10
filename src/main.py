@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
+from .api.routes_articles import router as articles_router
 from .api.routes_bias_ratings import router as bias_ratings_router
 from .db.init_db import init_db
 
@@ -18,6 +19,7 @@ app.add_middleware(
 
 # Register API routers
 app.include_router(bias_ratings_router, prefix="/bias_ratings", tags=["Bias Ratings"])
+app.include_router(articles_router, prefix="/articles", tags=["Articles"])
 
 
 # ---- Startup event ----

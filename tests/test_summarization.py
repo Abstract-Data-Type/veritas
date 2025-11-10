@@ -89,8 +89,3 @@ class TestSummarizationIntegration:
         response = client.get("/")
         assert response.status_code == 200
         assert "status" in response.json()
-
-    def test_bias_ratings_endpoint_exists(self):
-        """Test that bias ratings endpoint is accessible"""
-        response = client.get("/bias_ratings/")
-        assert response.status_code in [200, 500]  # May fail if DB not initialized

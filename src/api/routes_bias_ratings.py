@@ -1,255 +1,253 @@
 import os
-from typing import List
+from datetime import datetime
+from typing import Dict
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..db.sqlalchemy import get_session
-from ..models.bias_rating import (
-    BiasRatingListResponse,
-    BiasRatingResponse,
-    BiasRatingUpdate,
-)
-from ..models.sqlalchemy_models import BiasRating
+from ..models.sqlalchemy_models import Article, BiasRating
 
 router = APIRouter()
 
 
-@router.get("/", response_model=BiasRatingListResponse)
-async def get_bias_ratings(db: Session = Depends(get_session)):
-    """
-    Retrieve all bias ratings
-
-    Returns:
-        List of all bias ratings in the database
-    """
-    try:
-        records = db.query(BiasRating).order_by(BiasRating.evaluated_at.desc()).all()
-        ratings = [
-            BiasRatingResponse(
-                rating_id=r.rating_id,
-                article_id=r.article_id,
-                bias_score=r.bias_score,
-                reasoning=r.reasoning,
-                evaluated_at=r.evaluated_at,
-            )
-            for r in records
-        ]
-        return BiasRatingListResponse(ratings=ratings, total=len(ratings))
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve bias ratings: {str(e)}"
-        )
-
-
-@router.get("/{rating_id}", response_model=BiasRatingResponse)
-async def get_bias_rating(rating_id: int, db: Session = Depends(get_session)):
-    """
-    Retrieve a single bias rating by ID
-
-    Args:
-        rating_id: The ID of the bias rating to retrieve
-
-    Returns:
-        The bias rating with the specified ID
-
-    Raises:
-        HTTPException: If the bias rating is not found
-    """
-    try:
-        r = db.query(BiasRating).filter(BiasRating.rating_id == rating_id).first()
-        if not r:
-            raise HTTPException(
-                status_code=404, detail=f"Bias rating with ID {rating_id} not found"
-            )
-        return BiasRatingResponse(
-            rating_id=r.rating_id,
-            article_id=r.article_id,
-            bias_score=r.bias_score,
-            reasoning=r.reasoning,
-            evaluated_at=r.evaluated_at,
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve bias rating: {str(e)}"
-        )
-
-
-@router.put("/{rating_id}", response_model=BiasRatingResponse)
-async def update_bias_rating_endpoint(
-    rating_id: int, rating_update: BiasRatingUpdate, db: Session = Depends(get_session)
-):
-    """
-    Update an existing bias rating
-
-    Args:
-        rating_id: The ID of the bias rating to update
-        rating_update: The updated bias rating data
-
-    Returns:
-        The updated bias rating
-
-    Raises:
-        HTTPException: If the bias rating is not found or update fails
-    """
-    try:
-        r = db.query(BiasRating).filter(BiasRating.rating_id == rating_id).first()
-        if not r:
-            raise HTTPException(
-                status_code=404, detail=f"Bias rating with ID {rating_id} not found"
-            )
-
-        if rating_update.bias_score is not None:
-            if rating_update.bias_score < -1.0 or rating_update.bias_score > 1.0:
-                raise HTTPException(
-                    status_code=422, detail="Bias score must be between -1.0 and 1.0"
-                )
-
-        if rating_update.bias_score is not None:
-            r.bias_score = rating_update.bias_score
-        if rating_update.reasoning is not None:
-            r.reasoning = rating_update.reasoning
-
-        from datetime import datetime
-
-        r.evaluated_at = datetime.utcnow()
-        db.add(r)
-        db.commit()
-        db.refresh(r)
-        return BiasRatingResponse(
-            rating_id=r.rating_id,
-            article_id=r.article_id,
-            bias_score=r.bias_score,
-            reasoning=r.reasoning,
-            evaluated_at=r.evaluated_at,
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to update bias rating: {str(e)}"
-        )
-
-
 class SummarizeRequest(BaseModel):
+    """Request to summarize article text"""
+
     article_text: str
 
 
-@router.post("/summarize")
-async def summarize_article(request: SummarizeRequest):
+class AnalyzeArticleRequest(BaseModel):
+    """Request to analyze an article for bias"""
+
+    article_id: int
+
+
+class AnalyzeArticleResponse(BaseModel):
+    """Response after analyzing article for bias"""
+
+    rating_id: int
+    article_id: int
+    bias_score: float
+    reasoning: str
+    scores: Dict[str, float]
+
+
+@router.post("/analyze", response_model=AnalyzeArticleResponse)
+async def analyze_article_bias(
+    request: AnalyzeArticleRequest, db: Session = Depends(get_session)
+):
     """
-    Summarize an article using the external summarization service.
+    Analyze an article for political bias using the LLM service.
+
+    This endpoint is called by the worker after storing a new article.
+    It fetches the article text, calls the bias rating service, and stores the results.
 
     Args:
-        request: Contains article_text to summarize
+        request: Contains article_id to analyze
 
     Returns:
-        JSON with summary field containing the generated summary
+        The created bias rating with scores
+
+    Raises:
+        HTTPException: If article not found or bias service fails
     """
-    if not request.article_text or not request.article_text.strip():
-        return JSONResponse(
-            status_code=422, content={"detail": "article_text cannot be empty"}
+    # Fetch the article
+    article = db.query(Article).filter(Article.article_id == request.article_id).first()
+    if not article:
+        raise HTTPException(
+            status_code=404, detail=f"Article {request.article_id} not found"
         )
 
+    if not article.raw_text or not article.raw_text.strip():
+        raise HTTPException(
+            status_code=422, detail="Article has no text content to analyze"
+        )
+
+    # Check if bias rating already exists
+    existing_rating = (
+        db.query(BiasRating).filter(BiasRating.article_id == request.article_id).first()
+    )
+    if existing_rating:
+        logger.info(
+            f"Bias rating already exists for article {request.article_id}, returning existing"
+        )
+        return AnalyzeArticleResponse(
+            rating_id=existing_rating.rating_id,
+            article_id=existing_rating.article_id,
+            bias_score=existing_rating.bias_score or 0.0,
+            reasoning=existing_rating.reasoning or "",
+            scores={},
+        )
+
+    # Call the bias rating service
     summarization_service_url = os.environ.get(
         "SUMMARIZATION_SERVICE_URL", "http://localhost:8000"
     ).rstrip("/")
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            logger.info(f"Calling bias service for article {request.article_id}")
+            response = await client.post(
+                f"{summarization_service_url}/rate-bias",
+                json={"article_text": article.raw_text},
+            )
+
+            if response.status_code != 200:
+                logger.error(
+                    f"Bias service error {response.status_code}: {response.text}"
+                )
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Bias rating service failed: {response.status_code}",
+                )
+
+            bias_data = response.json()
+
+            # Extract whatever the bias service returns
+            bias_score = bias_data.get("bias_score")
+            reasoning = bias_data.get("reasoning", "")
+            scores = bias_data.get("scores", {})
+
+            # Store the bias rating with whatever the service provided
+            new_rating = BiasRating(
+                article_id=request.article_id,
+                bias_score=bias_score,
+                reasoning=reasoning,
+                evaluated_at=datetime.utcnow(),
+            )
+
+            db.add(new_rating)
+            db.commit()
+            db.refresh(new_rating)
+
+            logger.info(
+                f"Stored bias rating {new_rating.rating_id} for article {request.article_id}"
+            )
+
+            return AnalyzeArticleResponse(
+                rating_id=new_rating.rating_id,
+                article_id=new_rating.article_id,
+                bias_score=new_rating.bias_score,
+                reasoning=new_rating.reasoning,
+                scores=scores,
+            )
+
+    except httpx.TimeoutException:
+        logger.error("Bias service timeout")
+        raise HTTPException(status_code=504, detail="Bias rating service timeout")
+    except httpx.RequestError as e:
+        logger.error(f"Bias service connection error: {e}")
+        raise HTTPException(status_code=502, detail="Cannot reach bias rating service")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error analyzing bias: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to analyze article bias: {str(e)}"
+        )
+
+
+@router.post("/summarize")
+async def summarize_article(request: SummarizeRequest):
+    """
+    Summarize article text using the summarization service.
+
+    This endpoint validates the input and forwards the request to the
+    summarization service, handling errors appropriately.
+
+    Args:
+        request: Contains article_text to summarize
+
+    Returns:
+        Dictionary with 'summary' key containing the summarized text
+
+    Raises:
+        HTTPException: 422 for invalid input, 502 for service errors
+    """
+    # Validate article text
+    if not request.article_text or not request.article_text.strip():
+        raise HTTPException(
+            status_code=422, detail="Article text is required and cannot be empty"
+        )
+
+    # Get summarization service URL
+    summarization_service_url = os.environ.get(
+        "SUMMARIZATION_SERVICE_URL", "http://localhost:8000"
+    ).rstrip("/")
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            logger.info("Calling summarization service")
             response = await client.post(
                 f"{summarization_service_url}/summarize",
                 json={"article_text": request.article_text},
             )
 
+            # Handle 4xx client errors from summarization service
+            if 400 <= response.status_code < 500:
+                logger.error(
+                    f"Summarization service client error {response.status_code}: {response.text}"
+                )
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Invalid request to summarization service: {response.text}",
+                )
+
+            # Handle 5xx server errors from summarization service
+            if response.status_code >= 500:
+                logger.error(
+                    f"Summarization service server error {response.status_code}: {response.text}"
+                )
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Summarization service error: {response.status_code}",
+                )
+
+            # Handle successful response
             if response.status_code == 200:
-                # Malformed JSON from upstream should surface as 502
                 try:
                     data = response.json()
-                except Exception:
-                    logger.error("Summarization service returned invalid JSON")
-                    return JSONResponse(
+                except Exception as e:
+                    logger.error(f"Failed to parse JSON response: {e}")
+                    raise HTTPException(
                         status_code=502,
-                        content={
-                            "detail": "Summarization service returned invalid JSON"
-                        },
+                        detail="Summarization service returned invalid JSON",
                     )
 
-                # Ensure JSON has expected shape
-                if not isinstance(data, dict) or "summary" not in data:
-                    logger.error(f"Summarization service missing 'summary' key: {data}")
-                    return JSONResponse(
+                # Check if summary field exists and is not empty
+                summary = data.get("summary", "")
+                if not summary or not summary.strip():
+                    logger.error("Summarization service returned empty summary")
+                    raise HTTPException(
                         status_code=502,
-                        content={
-                            "detail": "Summarization service returned empty summary"
-                        },
-                    )
-
-                raw_summary = data.get("summary")
-                # Coerce to string in case upstream returns non-string
-                summary = str(raw_summary).strip() if raw_summary is not None else ""
-
-                # Validate that summary is not empty
-                if not summary:
-                    logger.error(
-                        f"Summarization service returned empty summary: {data}"
-                    )
-                    return JSONResponse(
-                        status_code=502,
-                        content={
-                            "detail": "Summarization service returned empty summary"
-                        },
+                        detail="Summarization service returned empty summary",
                     )
 
                 return {"summary": summary}
-            elif response.status_code >= 500:
-                logger.error(f"Summarization service error: {response.text}")
-                return JSONResponse(
-                    status_code=502, content={"detail": "Summary generation failed"}
-                )
-            elif response.status_code >= 400:
-                # Forward client errors (4xx) with appropriate status
-                logger.warning(
-                    f"Client error from summarization service: {response.status_code} - {response.text}"
-                )
-                # Forward exact 422 when present, otherwise 400
-                forward_code = 422 if response.status_code == 422 else 400
-                return JSONResponse(
-                    status_code=forward_code,
-                    content={
-                        "detail": f"Invalid request to summarization service: {response.text}"
-                    },
-                )
-            else:
-                # Unexpected status codes (e.g., 3xx redirects)
-                logger.error(
-                    f"Unexpected status code from summarization service: {response.status_code}"
-                )
-                return JSONResponse(
-                    status_code=502,
-                    content={
-                        "detail": "Unexpected response from summarization service"
-                    },
-                )
+
+            # Unexpected status code
+            logger.error(f"Unexpected status code {response.status_code}")
+            raise HTTPException(
+                status_code=502,
+                detail=f"Unexpected response from summarization service: {response.status_code}",
+            )
 
     except httpx.TimeoutException:
         logger.error("Summarization service timeout")
-        return JSONResponse(
-            status_code=504, content={"detail": "Summarization service timeout"}
-        )
+        raise HTTPException(status_code=504, detail="Summarization service timeout")
     except httpx.RequestError as e:
         logger.error(f"Summarization service connection error: {e}")
-        return JSONResponse(
-            status_code=502, content={"detail": "Cannot reach summarization service"}
+        raise HTTPException(
+            status_code=502, detail="Cannot reach summarization service"
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Unexpected error in summarize endpoint: {e}")
-        return JSONResponse(
-            status_code=500, content={"detail": "Internal server error"}
+        logger.error(f"Unexpected error during summarization: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to summarize article: {str(e)}"
         )

@@ -1,17 +1,20 @@
 """
-Simple unit tests for bias rating endpoints.
-Tests the core functionality using SQLAlchemy.
+Unit tests for bias rating analyze endpoint.
+Tests the /analyze endpoint that calls the LLM service and stores results.
 """
 
 import os
 from datetime import datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
+from httpx import Response
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from src.db.init_db import init_db
 from src.db.sqlalchemy import Base
+from src.main import app
 from src.models.sqlalchemy_models import Article, BiasRating
 
 
@@ -31,23 +34,17 @@ def test_db():
     db = TestSessionLocal()
 
     try:
-        # Insert test article (required for foreign key)
+        # Insert test article with content
         test_article = Article(
-            title="Test Article", source="Test Source", created_at=datetime.utcnow()
+            title="Test Article",
+            source="Test Source",
+            url="https://test.com/article",
+            raw_text="This is test article content for bias analysis.",
+            created_at=datetime.utcnow(),
         )
         db.add(test_article)
         db.commit()
         db.refresh(test_article)
-
-        # Insert test bias rating
-        test_rating = BiasRating(
-            article_id=test_article.article_id,
-            bias_score=0.5,
-            reasoning="Test reasoning",
-            evaluated_at=datetime.utcnow(),
-        )
-        db.add(test_rating)
-        db.commit()
 
         yield db
     finally:
@@ -55,180 +52,140 @@ def test_db():
         Base.metadata.drop_all(bind=engine)
 
 
-class TestBiasRatingEndpoints:
-    """Test bias rating endpoint functionality"""
+@pytest.fixture
+def client():
+    """Create a test client for the FastAPI app"""
+    return TestClient(app)
 
-    def test_get_all_bias_ratings_data(self, test_db):
-        """Test retrieving all bias ratings returns correct data"""
-        results = test_db.query(BiasRating).all()
 
-        assert len(results) == 1
-        assert results[0].rating_id == 1
-        assert results[0].article_id == 1
-        assert results[0].bias_score == 0.5
-        assert results[0].reasoning == "Test reasoning"
+class TestAnalyzeEndpoint:
+    """Test the /bias_ratings/analyze endpoint"""
 
-    def test_get_bias_rating_by_id_exists(self, test_db):
-        """Test retrieving a specific bias rating that exists"""
-        result = test_db.query(BiasRating).filter(BiasRating.rating_id == 1).first()
+    def test_analyze_article_not_found(self, test_db, client):
+        """Test analyzing a non-existent article"""
+        from src.db.sqlalchemy import get_session
 
-        assert result is not None
-        assert result.rating_id == 1
-        assert result.bias_score == 0.5
-
-    def test_get_bias_rating_by_id_not_found(self, test_db):
-        """Test retrieving a bias rating that doesn't exist"""
-        result = test_db.query(BiasRating).filter(BiasRating.rating_id == 999).first()
-
-        assert result is None
-
-    def test_update_bias_rating_success(self, test_db):
-        """Test successfully updating a bias rating"""
-        # Get the bias rating
-        rating = test_db.query(BiasRating).filter(BiasRating.rating_id == 1).first()
-
-        # Update the bias rating
-        rating.bias_score = 0.8
-        rating.reasoning = "Updated reasoning"
-        test_db.commit()
-
-        # Verify the update
-        test_db.refresh(rating)
-
-        assert rating.bias_score == 0.8
-        assert rating.reasoning == "Updated reasoning"
-
-    def test_update_partial_fields(self, test_db):
-        """Test updating only some fields"""
-        # Get the bias rating
-        rating = test_db.query(BiasRating).filter(BiasRating.rating_id == 1).first()
-
-        # Update only bias_score
-        rating.bias_score = -0.3
-        test_db.commit()
-
-        # Verify bias_score changed but reasoning stayed the same
-        test_db.refresh(rating)
-
-        assert rating.bias_score == -0.3  # bias_score updated
-        assert rating.reasoning == "Test reasoning"  # reasoning unchanged
-
-    def test_bias_score_validation(self):
-        """Test bias score validation logic"""
-        # Valid scores
-        valid_scores = [-1.0, -0.5, 0.0, 0.5, 1.0]
-        for score in valid_scores:
-            assert -1.0 <= score <= 1.0, f"Score {score} should be valid"
-
-        # Invalid scores
-        invalid_scores = [-1.1, 1.1, -2.0, 2.0]
-        for score in invalid_scores:
-            assert not (-1.0 <= score <= 1.0), f"Score {score} should be invalid"
-
-    def test_bias_rating_exists_check(self, test_db):
-        """Test checking if a bias rating exists"""
-        # Check existing rating
-        exists = (
-            test_db.query(BiasRating).filter(BiasRating.rating_id == 1).first()
-            is not None
-        )
-        assert exists is True
-
-        # Check non-existing rating
-        exists = (
-            test_db.query(BiasRating).filter(BiasRating.rating_id == 999).first()
-            is not None
-        )
-        assert exists is False
-
-    def test_database_error_handling(self):
-        """Test database error scenarios"""
-        from sqlalchemy.exc import InvalidRequestError, PendingRollbackError
-
-        # Test with a transaction that's been rolled back
-        engine = create_engine("sqlite:///:memory:")
-        Base.metadata.create_all(bind=engine)
-        TestSessionLocal = sessionmaker(bind=engine)
-        db = TestSessionLocal()
-
-        try:
-            # Create an article first
-            article = Article(title="Test", source="Test")
-            db.add(article)
-            db.commit()
-
-            # Start a transaction that will fail
+        def override_get_session():
             try:
-                # Try to insert an invalid bias rating (invalid foreign key)
-                invalid_rating = BiasRating(
-                    article_id=999, bias_score=0.5  # Doesn't exist
-                )
-                db.add(invalid_rating)
-                db.flush()  # This will fail
-            except Exception:
-                # Transaction is now in a failed state
+                yield test_db
+            finally:
                 pass
 
-            # Attempting to do another operation without rolling back should fail
-            # In SQLAlchemy 2.0, this behavior is more lenient, so we'll test
-            # that we can still rollback properly
-            db.rollback()  # Should not raise
+        app.dependency_overrides[get_session] = override_get_session
 
-            # Verify we can use the session after rollback
-            count = db.query(BiasRating).count()
-            assert count == 0
+        try:
+            response = client.post("/bias_ratings/analyze", json={"article_id": 999})
+            assert response.status_code == 404
+            assert "not found" in response.json()["detail"].lower()
         finally:
-            db.close()
+            app.dependency_overrides.clear()
 
-    def test_foreign_key_constraint(self, test_db):
-        """Test foreign key constraints work"""
-        from sqlalchemy.exc import IntegrityError
-
-        # Try to insert bias rating for non-existent article
-        # SQLite needs foreign keys explicitly enabled in the connection string
-        # Since we can't control that in the fixture easily, we'll create a new engine
-        engine = create_engine(
-            "sqlite:///:memory:", connect_args={"check_same_thread": False}
+    def test_analyze_article_no_content(self, test_db, client):
+        """Test analyzing an article with no text content"""
+        # Create article without raw_text
+        article = Article(
+            title="Empty Article",
+            source="Test",
+            url="https://test.com/empty",
+            raw_text="",
+            created_at=datetime.utcnow(),
         )
+        test_db.add(article)
+        test_db.commit()
+        test_db.refresh(article)
 
-        # Enable foreign keys
-        from sqlalchemy import event
+        from src.db.sqlalchemy import get_session
 
-        @event.listens_for(engine, "connect")
-        def set_sqlite_pragma(dbapi_conn, connection_record):
-            cursor = dbapi_conn.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.close()
+        def override_get_session():
+            try:
+                yield test_db
+            finally:
+                pass
 
-        Base.metadata.create_all(bind=engine)
-        TestSessionLocal = sessionmaker(bind=engine)
-        db = TestSessionLocal()
-
-        try:
-            with pytest.raises(IntegrityError):
-                invalid_rating = BiasRating(
-                    article_id=999,  # article_id 999 doesn't exist
-                    bias_score=0.5,
-                    reasoning="Test",
-                )
-                db.add(invalid_rating)
-                db.commit()
-        finally:
-            db.close()
-
-    def test_empty_database_scenario(self):
-        """Test behavior with empty bias_ratings table"""
-        # Create a fresh in-memory database
-        engine = create_engine("sqlite:///:memory:")
-        Base.metadata.create_all(bind=engine)
-        TestSessionLocal = sessionmaker(bind=engine)
-        db = TestSessionLocal()
+        app.dependency_overrides[get_session] = override_get_session
 
         try:
-            count = db.query(BiasRating).count()
-            assert count == 0
+            response = client.post(
+                "/bias_ratings/analyze", json={"article_id": article.article_id}
+            )
+            assert response.status_code == 422
+            assert "no text content" in response.json()["detail"].lower()
         finally:
-            db.close()
+            app.dependency_overrides.clear()
+
+    def test_analyze_returns_existing_rating(self, test_db, client):
+        """Test that analyzing an already-analyzed article returns existing rating"""
+        # Create existing bias rating
+        existing_rating = BiasRating(
+            article_id=1,
+            bias_score=0.5,
+            reasoning="Existing analysis",
+            evaluated_at=datetime.utcnow(),
+        )
+        test_db.add(existing_rating)
+        test_db.commit()
+        test_db.refresh(existing_rating)
+
+        from src.db.sqlalchemy import get_session
+
+        def override_get_session():
+            try:
+                yield test_db
+            finally:
+                pass
+
+        app.dependency_overrides[get_session] = override_get_session
+
+        try:
+            response = client.post("/bias_ratings/analyze", json={"article_id": 1})
+
+            # Should return existing rating without calling the service
+            assert response.status_code == 200
+            data = response.json()
+            assert data["rating_id"] == existing_rating.rating_id
+            assert data["bias_score"] == 0.5
+            assert data["reasoning"] == "Existing analysis"
+        finally:
+            app.dependency_overrides.clear()
+
+
+class TestDatabaseOperations:
+    """Test database-level bias rating operations"""
+
+    def test_create_bias_rating_directly(self, test_db):
+        """Test creating a bias rating directly in the database"""
+        rating = BiasRating(
+            article_id=1,
+            bias_score=0.7,
+            reasoning="Test direct creation",
+            evaluated_at=datetime.utcnow(),
+        )
+        test_db.add(rating)
+        test_db.commit()
+        test_db.refresh(rating)
+
+        assert rating.rating_id is not None
+        assert rating.article_id == 1
+        assert rating.bias_score == 0.7
+
+    def test_query_bias_rating_by_article(self, test_db):
+        """Test querying bias ratings by article_id"""
+        # Create a rating
+        rating = BiasRating(
+            article_id=1,
+            bias_score=0.2,
+            reasoning="Test query",
+            evaluated_at=datetime.utcnow(),
+        )
+        test_db.add(rating)
+        test_db.commit()
+
+        # Query it back
+        result = test_db.query(BiasRating).filter(BiasRating.article_id == 1).first()
+
+        assert result is not None
+        assert result.article_id == 1
+        assert result.bias_score == 0.2
 
 
 if __name__ == "__main__":

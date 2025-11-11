@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..ai import rate_bias, summarize_with_gemini
 from ..db.sqlalchemy import get_session
+from ..models.bias_rating import get_all_dimension_scores, get_overall_bias_score
 from ..models.sqlalchemy_models import Article, BiasRating
 
 router = APIRouter()
@@ -30,9 +31,14 @@ class AnalyzeArticleResponse(BaseModel):
 
     rating_id: int
     article_id: int
-    bias_score: float
+    bias_score: float | None
     reasoning: str
     scores: Dict[str, float]
+    # Multi-dimensional scores
+    partisan_bias: float | None = None
+    affective_bias: float | None = None
+    framing_bias: float | None = None
+    sourcing_bias: float | None = None
 
 
 @router.post("/analyze", response_model=AnalyzeArticleResponse)
@@ -74,12 +80,18 @@ async def analyze_article_bias(
         logger.info(
             f"Bias rating already exists for article {request.article_id}, returning existing"
         )
+        dimension_scores = get_all_dimension_scores(existing_rating)
+        overall_score = get_overall_bias_score(existing_rating)
         return AnalyzeArticleResponse(
             rating_id=existing_rating.rating_id,
             article_id=existing_rating.article_id,
-            bias_score=existing_rating.bias_score or 0.0,
+            bias_score=overall_score,
             reasoning=existing_rating.reasoning or "",
-            scores={},
+            scores=dimension_scores,
+            partisan_bias=existing_rating.partisan_bias,
+            affective_bias=existing_rating.affective_bias,
+            framing_bias=existing_rating.framing_bias,
+            sourcing_bias=existing_rating.sourcing_bias,
         )
 
     # Call the bias rating function directly
@@ -89,32 +101,54 @@ async def analyze_article_bias(
 
         # Extract scores from result
         scores = bias_result.get("scores", {})
-        # For now, we don't have a single bias_score, so we'll use None or calculate one
-        # The database schema expects bias_score, but we're storing scores dict
-        bias_score = None  # Could calculate from scores if needed
+        
+        # Extract individual dimension scores
+        partisan_bias = scores.get("partisan_bias")
+        affective_bias = scores.get("affective_bias")
+        framing_bias = scores.get("framing_bias")
+        sourcing_bias = scores.get("sourcing_bias")
+        
+        # Calculate overall bias score as average of dimensions
+        valid_scores = [s for s in [partisan_bias, affective_bias, framing_bias, sourcing_bias] if s is not None]
+        overall_bias_score = sum(valid_scores) / len(valid_scores) if valid_scores else None
 
-        # Store the bias rating
+        # Store the bias rating with all dimensions
         new_rating = BiasRating(
             article_id=request.article_id,
-            bias_score=bias_score,
+            bias_score=overall_bias_score,
+            partisan_bias=partisan_bias,
+            affective_bias=affective_bias,
+            framing_bias=framing_bias,
+            sourcing_bias=sourcing_bias,
             reasoning=None,  # Could add reasoning extraction later
             evaluated_at=datetime.utcnow(),
         )
 
         db.add(new_rating)
+        db.flush()  # Flush to get rating_id without full commit
+        
+        # Get rating_id after flush (it's populated by autoincrement)
+        rating_id = new_rating.rating_id
+        
+        # Now commit the transaction
         db.commit()
-        db.refresh(new_rating)
 
         logger.info(
-            f"Stored bias rating {new_rating.rating_id} for article {request.article_id}"
+            f"Stored bias rating {rating_id} for article {request.article_id} "
+            f"with scores: partisan={partisan_bias}, affective={affective_bias}, "
+            f"framing={framing_bias}, sourcing={sourcing_bias}"
         )
 
         return AnalyzeArticleResponse(
-            rating_id=new_rating.rating_id,
-            article_id=new_rating.article_id,
-            bias_score=new_rating.bias_score or 0.0,
-            reasoning=new_rating.reasoning or "",
+            rating_id=rating_id,
+            article_id=request.article_id,  # Use request parameter instead of DB object
+            bias_score=overall_bias_score,
+            reasoning="",  # Not storing reasoning currently
             scores=scores,
+            partisan_bias=partisan_bias,
+            affective_bias=affective_bias,
+            framing_bias=framing_bias,
+            sourcing_bias=sourcing_bias,
         )
 
     except HTTPException:

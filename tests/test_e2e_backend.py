@@ -203,7 +203,7 @@ def test_bias_analysis_e2e_with_real_article(backend_server, e2e_test_db):
     # Create an article in the same database the backend uses
     from sqlalchemy import create_engine
     from sqlalchemy.orm import Session
-    from src.models.sqlalchemy_models import Article
+    from src.models.sqlalchemy_models import Article, Summary
 
     engine = create_engine(f"sqlite:///{e2e_test_db}")
 
@@ -218,16 +218,24 @@ def test_bias_analysis_e2e_with_real_article(backend_server, e2e_test_db):
     """
 
     with Session(engine) as session:
+        # Create article without summary field (it's in a separate table)
         article = Article(
             title="Test Climate Bill Article",
             url="https://example.com/climate-bill-test",
             source="Test News",
             raw_text=test_article_text.strip(),
-            summary="Senate passes climate bill with bipartisan support",
         )
         session.add(article)
+        session.flush()  # Get article.article_id
+        
+        # Create summary in separate Summary table
+        summary = Summary(
+            article_id=article.article_id,
+            summary_text="Senate passes climate bill with bipartisan support",
+        )
+        session.add(summary)
         session.commit()
-        article_id = article.id
+        article_id = article.article_id
 
     # Make real HTTP request to running server for bias analysis
     with httpx.Client(timeout=120.0) as client:  # Longer timeout for parallel LLM calls
@@ -285,3 +293,221 @@ def test_bias_analysis_e2e_article_not_found(backend_server):
     assert "detail" in data
     assert "not found" in data["detail"].lower()
 
+
+@pytest.mark.e2e
+def test_full_cycle_article_workflow(backend_server, e2e_test_db):
+    """
+    COMPLETE END-TO-END WORKFLOW TEST
+    
+    This test verifies the ENTIRE backend flow from start to finish:
+    1. Create an article in the database
+    2. Call bias analysis endpoint → stores bias_rating with 4 dimensions
+    3. Query back the stored article + bias_rating from database
+    4. Verify all data is persisted correctly with new multi-dimensional structure
+    5. Verify relationships are intact
+    
+    This tests the full database cycle with the new multi-dimensional bias scoring.
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from src.models.sqlalchemy_models import Article, BiasRating
+    
+    base_url = "http://127.0.0.1:8002"
+    
+    # STEP 1: Create an article in database
+    engine = create_engine(f"sqlite:///{e2e_test_db}")
+    
+    article_text = """
+    Tesla reported record quarterly earnings today, driven by strong electric vehicle sales.
+    The company announced a new factory in Mexico and expanded production targets.
+    Competitors are accelerating EV development, with traditional automakers investing heavily.
+    Environmental groups praised the shift but criticized labor practices at some facilities.
+    Stock analysts remain divided on long-term profitability.
+    """
+    
+    with Session(engine) as session:
+        article = Article(
+            title="Tesla Q3 Earnings Report",
+            url="https://example.com/tesla-earnings",
+            source="Financial News",
+            raw_text=article_text.strip(),
+        )
+        session.add(article)
+        session.flush()
+        article_id = article.article_id
+        session.commit()
+    
+    # STEP 2: Call bias analysis endpoint (makes real API calls)
+    with httpx.Client(timeout=120.0) as client:
+        resp = client.post(
+            f"{base_url}/bias_ratings/analyze",
+            json={"article_id": article_id},
+        )
+    
+    assert resp.status_code == 200, f"Bias analysis failed: {resp.text}"
+    analysis_response = resp.json()
+    rating_id = analysis_response["rating_id"]
+    
+    # Verify response contains all 4 dimensions
+    scores = analysis_response["scores"]
+    assert set(scores.keys()) == {"partisan_bias", "affective_bias", "framing_bias", "sourcing_bias"}
+    
+    # STEP 3: Query back the article AND bias_rating from database
+    with Session(engine) as session:
+        # Fetch article
+        stored_article = session.query(Article).filter(
+            Article.article_id == article_id
+        ).first()
+        
+        # Fetch bias rating WITH EAGER LOADING to avoid detached instance errors
+        from sqlalchemy.orm import joinedload
+        stored_rating = session.query(BiasRating).options(
+            joinedload(BiasRating.article)
+        ).filter(
+            BiasRating.rating_id == rating_id
+        ).first()
+        
+        # STEP 4: Verify article was stored correctly
+        assert stored_article is not None, "Article not found in database"
+        assert stored_article.title == "Tesla Q3 Earnings Report"
+        assert stored_article.raw_text == article_text.strip()
+        assert stored_article.source == "Financial News"
+        
+        # STEP 5: Verify bias rating was stored correctly with NEW MULTI-DIMENSIONAL STRUCTURE
+        assert stored_rating is not None, "BiasRating not found in database"
+        assert stored_rating.article_id == article_id
+        
+        # ✅ VERIFY NEW COLUMNS EXIST AND ARE POPULATED
+        assert stored_rating.partisan_bias is not None, "partisan_bias should be stored"
+        assert stored_rating.affective_bias is not None, "affective_bias should be stored"
+        assert stored_rating.framing_bias is not None, "framing_bias should be stored"
+        assert stored_rating.sourcing_bias is not None, "sourcing_bias should be stored"
+        
+        # ✅ VERIFY VALUES ARE IN VALID RANGE
+        for dimension_name, dimension_value in [
+            ("partisan_bias", stored_rating.partisan_bias),
+            ("affective_bias", stored_rating.affective_bias),
+            ("framing_bias", stored_rating.framing_bias),
+            ("sourcing_bias", stored_rating.sourcing_bias),
+        ]:
+            assert 1.0 <= dimension_value <= 7.0, (
+                f"{dimension_name} value {dimension_value} not in valid range [1.0, 7.0]"
+            )
+        
+        # ✅ VERIFY OVERALL BIAS_SCORE IS COMPUTED AS AVERAGE
+        expected_avg = (
+            stored_rating.partisan_bias + 
+            stored_rating.affective_bias + 
+            stored_rating.framing_bias + 
+            stored_rating.sourcing_bias
+        ) / 4
+        assert abs(stored_rating.bias_score - expected_avg) < 0.01, (
+            f"bias_score {stored_rating.bias_score} should be average of 4 dimensions {expected_avg}"
+        )
+        
+        # ✅ VERIFY RELATIONSHIP BETWEEN ARTICLE AND BIAS_RATING
+        assert stored_rating.article_id == stored_article.article_id
+        assert stored_rating.article is not None
+        assert stored_rating.article.article_id == article_id
+    
+
+
+@pytest.mark.e2e
+def test_database_persistence_and_retrieval(backend_server, e2e_test_db):
+    """
+    DATABASE PERSISTENCE TEST
+    
+    Verifies that:
+    1. Analysis results are properly persisted to the database
+    2. Data can be retrieved in the same session
+    3. All 4 dimension scores are stored and retrievable
+    4. Relationships work correctly
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from src.models.sqlalchemy_models import Article, BiasRating
+    from src.models.bias_rating import (
+        get_overall_bias_score,
+        get_all_dimension_scores,
+        get_dimension_score,
+    )
+    
+    base_url = "http://127.0.0.1:8002"
+    engine = create_engine(f"sqlite:///{e2e_test_db}")
+    
+    # Create multiple test articles (2 articles = ~240 seconds max, fits in e2e timeout)
+    test_cases = [
+        {
+            "title": "Progressive Policy Article",
+            "text": "Progressive policies focus on equality, social safety nets, and environmental protection...",
+            "expected_lean": "progressive"
+        },
+        {
+            "title": "Conservative Policy Article", 
+            "text": "Conservative principles emphasize individual liberty, limited government, and market solutions...",
+            "expected_lean": "conservative"
+        },
+    ]
+    
+    article_ids = []
+    
+    # Create articles
+    with Session(engine) as session:
+        for test_case in test_cases:
+            article = Article(
+                title=test_case["title"],
+                url=f"https://example.com/{test_case['title'].lower().replace(' ', '-')}",
+                source="Test Source",
+                raw_text=test_case["text"],
+            )
+            session.add(article)
+            session.flush()
+            article_ids.append(article.article_id)
+        session.commit()
+    
+    # Analyze each article (120 second timeout per request for parallel LLM calls)
+    rating_ids = []
+    with httpx.Client(timeout=120.0) as client:
+        for article_id in article_ids:
+            resp = client.post(
+                f"{base_url}/bias_ratings/analyze",
+                json={"article_id": article_id},
+            )
+            assert resp.status_code == 200, f"Failed to analyze article {article_id}: {resp.text}"
+            rating_ids.append(resp.json()["rating_id"])
+    
+    # VERIFY: Query back all ratings and test utility functions
+    with Session(engine) as session:
+        from sqlalchemy.orm import joinedload
+        for i, rating_id in enumerate(rating_ids):
+            rating = session.query(BiasRating).options(
+                joinedload(BiasRating.article)
+            ).filter(
+                BiasRating.rating_id == rating_id
+            ).first()
+            
+            assert rating is not None, f"Rating {rating_id} not found"
+            
+            # ✅ Test utility functions
+            # 1. Get all dimension scores
+            all_scores = get_all_dimension_scores(rating)
+            assert len(all_scores) == 4
+            assert all(key in all_scores for key in [
+                "partisan_bias", "affective_bias", "framing_bias", "sourcing_bias"
+            ])
+            
+            # 2. Get overall score
+            overall = get_overall_bias_score(rating)
+            assert overall is not None
+            assert 1.0 <= overall <= 7.0
+            
+            # 3. Get individual dimension scores
+            for dimension in ["partisan_bias", "affective_bias", "framing_bias", "sourcing_bias"]:
+                score = get_dimension_score(rating, dimension)
+                assert score is not None
+                assert 1.0 <= score <= 7.0
+            
+            # 4. Verify relationship
+            article = rating.article
+            assert article is not None
+            assert article.article_id == article_ids[i]

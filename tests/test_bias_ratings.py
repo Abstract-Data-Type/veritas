@@ -114,10 +114,14 @@ class TestAnalyzeEndpoint:
 
     def test_analyze_returns_existing_rating(self, test_db, client):
         """Test that analyzing an already-analyzed article returns existing rating"""
-        # Create existing bias rating
+        # Create existing bias rating with multi-dimensional scores
         existing_rating = BiasRating(
             article_id=1,
-            bias_score=0.5,
+            bias_score=4.5,
+            partisan_bias=3.0,
+            affective_bias=4.0,
+            framing_bias=5.0,
+            sourcing_bias=6.0,
             reasoning="Existing analysis",
             evaluated_at=datetime.utcnow(),
         )
@@ -142,8 +146,13 @@ class TestAnalyzeEndpoint:
             assert response.status_code == 200
             data = response.json()
             assert data["rating_id"] == existing_rating.rating_id
-            assert data["bias_score"] == 0.5
+            assert data["bias_score"] == 4.5
             assert data["reasoning"] == "Existing analysis"
+            # Verify multi-dimensional scores
+            assert data["partisan_bias"] == 3.0
+            assert data["affective_bias"] == 4.0
+            assert data["framing_bias"] == 5.0
+            assert data["sourcing_bias"] == 6.0
         finally:
             app.dependency_overrides.clear()
 
@@ -180,8 +189,20 @@ class TestAnalyzeEndpoint:
             data = response.json()
             assert data["article_id"] == 1
             assert "rating_id" in data
-            # Verify Gemini was called (for each dimension)
-            assert mock_client.models.generate_content.call_count > 0
+            # Verify multi-dimensional scores are present
+            assert "partisan_bias" in data
+            assert "affective_bias" in data
+            assert "framing_bias" in data
+            assert "sourcing_bias" in data
+            # All scores should be 5.0 (from mock)
+            assert data["partisan_bias"] == 5.0
+            assert data["affective_bias"] == 5.0
+            assert data["framing_bias"] == 5.0
+            assert data["sourcing_bias"] == 5.0
+            # Overall bias score should be average (5.0)
+            assert data["bias_score"] == 5.0
+            # Verify Gemini was called (for each dimension - 4 times)
+            assert mock_client.models.generate_content.call_count == 4
         finally:
             app.dependency_overrides.clear()
             # Restore original key
@@ -230,10 +251,14 @@ class TestDatabaseOperations:
     """Test database-level bias rating operations"""
 
     def test_create_bias_rating_directly(self, test_db):
-        """Test creating a bias rating directly in the database"""
+        """Test creating a bias rating directly in the database with multi-dimensional scores"""
         rating = BiasRating(
             article_id=1,
-            bias_score=0.7,
+            bias_score=4.5,
+            partisan_bias=3.0,
+            affective_bias=4.0,
+            framing_bias=5.0,
+            sourcing_bias=6.0,
             reasoning="Test direct creation",
             evaluated_at=datetime.utcnow(),
         )
@@ -243,7 +268,11 @@ class TestDatabaseOperations:
 
         assert rating.rating_id is not None
         assert rating.article_id == 1
-        assert rating.bias_score == 0.7
+        assert rating.bias_score == 4.5
+        assert rating.partisan_bias == 3.0
+        assert rating.affective_bias == 4.0
+        assert rating.framing_bias == 5.0
+        assert rating.sourcing_bias == 6.0
 
     def test_query_bias_rating_by_article(self, test_db):
         """Test querying bias ratings by article_id"""

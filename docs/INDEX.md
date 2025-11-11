@@ -42,7 +42,7 @@ docs/
 1. Read: [SUBMISSION_CHECKLIST.md](SUBMISSION_CHECKLIST.md)
 2. Read: [guides/EXAMINER.md](guides/EXAMINER.md)
 3. Follow testing steps in EXAMINER.md
-4. Review code in src/ (including src/ai/ library)
+4. Review code in src/ and services/summarization/
 
 ### 🚀 Developers / Team Members
 1. Read: [guides/QUICK_START.md](guides/QUICK_START.md)
@@ -51,49 +51,56 @@ docs/
 4. Refer to [testing/TESTING.md](testing/TESTING.md) for test scenarios
 
 ### 📚 Architecture / Design Review
-1. Read: [implementation/01-PLAN.md](implementation/01-PLAN.md) (historical - original plan)
-2. Read: [implementation/02-SUMMARY.md](implementation/02-SUMMARY.md) (historical)
-3. Read: [implementation/05-REFACTOR-AI-TO-LIBRARY.md](implementation/05-REFACTOR-AI-TO-LIBRARY.md) (current architecture)
-4. Review [guides/EXAMINER.md](guides/EXAMINER.md) "Architecture Decisions" section
-5. Review code in src/ai/ and src/api/
+1. Read: [implementation/01-PLAN.md](implementation/01-PLAN.md)
+2. Read: [implementation/02-SUMMARY.md](implementation/02-SUMMARY.md)
+3. Review [guides/EXAMINER.md](guides/EXAMINER.md) "Architecture Decisions" section
+4. Review code in services/summarization/ and src/api/
 
 ## Linear Tickets
 
-- **VERITAS-42**: AI Library (summarization & bias analysis)
+- **VERITAS-42**: Core Summarization Microservice (FastAPI + Gemini)
 - **VERITAS-43**: Backend Integration (API endpoint + error handling)
 
 ## Key Features Implemented
 
-✅ AI library (`src/ai/`) for article summarization and bias analysis
+✅ FastAPI microservice for article summarization
 ✅ Google Gemini API integration
-✅ Comprehensive error handling (500, 502, 400, 422)
+✅ Comprehensive error handling (502, 504, 400, 422)
 ✅ Input validation and Pydantic models
-✅ Unit tests, integration tests, and e2e tests
+✅ Unit tests and integration tests
 ✅ Async/await for non-blocking I/O
 ✅ Configuration via environment variables
-✅ Prompt templates in YAML
 ✅ Health check endpoints
+✅ Docker containerization ready
 ✅ Full documentation and guides
 
 ## Quick Commands
 
 ### Setup
 ```bash
-# Backend (includes AI library)
+# Backend
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-export GEMINI_API_KEY="your-key-here"
+
+# Microservice
+cd services/summarization
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
 ### Run
 ```bash
-# Backend API (includes AI library)
+# Terminal 1: Summarization Service
+cd services/summarization && source venv/bin/activate
+uvicorn main:app --reload --port 8000
+
+# Terminal 2: Backend API
 source venv/bin/activate
-export GEMINI_API_KEY="your-key-here"
 python -m uvicorn src.main:app --reload --port 8001
 
-# Test
+# Terminal 3: Test
 curl -X POST http://localhost:8001/bias_ratings/summarize \
   -H "Content-Type: application/json" \
   -d '{"article_text": "Your article here..."}'
@@ -101,16 +108,12 @@ curl -X POST http://localhost:8001/bias_ratings/summarize \
 
 ### Test
 ```bash
-# AI library tests
-pytest tests/test_ai_summarization.py -v
-pytest tests/test_ai_bias_analysis.py -v
-
-# Backend integration tests
+# Backend tests
 pytest tests/test_summarization.py -v
-pytest tests/test_bias_ratings.py -v
 
-# End-to-end tests
-pytest tests/test_e2e_backend.py -v -m e2e
+# Microservice tests
+cd services/summarization
+pytest tests/test_summarize.py -v
 ```
 
 ## Status

@@ -1,99 +1,167 @@
-<!-- index.html -->
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Perspectiva - Unbiased News</title>
+    <title>Perspectiva / X</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="spectrum-graph.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
-    <header class="app-header">
-        <div class="container">
-            <h1>Perspectiva</h1>
-            <nav>
-                <a href="#" class="active">Home</a>
-                <a href="#">Topics</a>
-                <a href="#">Bookmarks</a>
-                <a href="#">About</a>
-            </nav>
-      
+    <div class="app-container">
+        <!-- Left Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-content">
+                <div class="logo">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" class="r-4qtqp9 r-yyyyoo r-dnmrzs r-bnwqim r-1plcrui r-lrvibr r-1nao33i r-1q142lx r-cnnz9e r-1loqt21"><g><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path></g></svg>
+                </div>
+                
+                <nav class="main-nav">
+                    <a href="#" class="nav-item active">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" class="r-18jsvk2 r-4qtqp9 r-yyyyoo r-lwhw9o r-dnmrzs r-bnwqim r-1plcrui r-lrvibr r-cnnz9e"><g><path d="M12 1.696L.622 8.807l1.06 1.696L3 9.679V19.5C3 20.881 4.119 22 5.5 22h13c1.381 0 2.5-1.119 2.5-2.5V9.679l1.318.824 1.06-1.696L12 1.696zM12 16.5c-1.933 0-3.5-1.567-3.5-3.5s1.567-3.5 3.5-3.5 3.5 1.567 3.5 3.5-1.567 3.5-3.5 3.5z"></path></g></svg>
+                        <span>Home</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" class="r-18jsvk2 r-4qtqp9 r-yyyyoo r-lwhw9o r-dnmrzs r-bnwqim r-1plcrui r-lrvibr r-cnnz9e"><g><path d="M10.25 3.75c-3.59 0-6.5 2.91-6.5 6.5s2.91 6.5 6.5 6.5c1.795 0 3.419-.726 4.596-1.904 1.178-1.177 1.904-2.801 1.904-4.596 0-3.59-2.91-6.5-6.5-6.5zm-8.5 6.5c0-4.694 3.806-8.5 8.5-8.5s8.5 3.806 8.5 8.5c0 1.986-.682 3.815-1.824 5.262l4.781 4.781-1.414 1.414-4.781-4.781c-1.447 1.142-3.276 1.824-5.262 1.824-4.694 0-8.5-3.806-8.5-8.5z"></path></g></svg>
+                        <span>Explore</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" class="r-18jsvk2 r-4qtqp9 r-yyyyoo r-lwhw9o r-dnmrzs r-bnwqim r-1plcrui r-lrvibr r-cnnz9e"><g><path d="M19.993 9.042C19.48 4.017 15.866.5 12 .5c-3.866 0-7.48 3.517-7.993 8.542L3.5 9v6l1.506.042c.034.36.09.715.168 1.062l-1.6 1.6 1.414 1.414 1.4-1.4c.596.535 1.27.97 2.006 1.282V20.5h2v-2.3c.717-.371 1.375-.89 1.944-1.51l1.985 1.986 1.414-1.415-1.985-1.986c.61-.56 1.12-1.21 1.49-1.91l1.508.041V9h-6.03l-1.47-1.47 1.06-1.06 3.44 3.44 3.44-3.44 1.06 1.06-1.47 1.47h6.03z"></path></g></svg>
+                        <span>Bias Analysis</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" class="r-18jsvk2 r-4qtqp9 r-yyyyoo r-lwhw9o r-dnmrzs r-bnwqim r-1plcrui r-lrvibr r-cnnz9e"><g><path d="M1.998 5.5c0-1.381 1.119-2.5 2.5-2.5h15c1.381 0 2.5 1.119 2.5 2.5v13c0 1.381-1.119 2.5-2.5 2.5h-15c-1.381 0-2.5-1.119-2.5-2.5v-13zm2.5-.5c-.276 0-.5.224-.5.5v2.764l8 3.638 8-3.636V5.5c0-.276-.224-.5-.5-.5h-15zm15.5 5.463l-8 3.636-8-3.638V18.5c0 .276.224.5.5.5h15c.276 0 .5-.224.5-.5v-8.037z"></path></g></svg>
+                        <span>Messages</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" class="r-18jsvk2 r-4qtqp9 r-yyyyoo r-lwhw9o r-dnmrzs r-bnwqim r-1plcrui r-lrvibr r-cnnz9e"><g><path d="M4 4.5C4 3.12 5.119 2 6.5 2h11C18.881 2 20 3.12 20 4.5v18.44l-8-5.71-8 5.71V4.5zM6.5 4c-.276 0-.5.22-.5.5v14.56l6-4.29 6 4.29V4.5c0-.28-.224-.5-.5-.5h-11z"></path></g></svg>
+                        <span>Bookmarks</span>
+                    </a>
+                    <a href="#" class="nav-item">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" class="r-18jsvk2 r-4qtqp9 r-yyyyoo r-lwhw9o r-dnmrzs r-bnwqim r-1plcrui r-lrvibr r-cnnz9e"><g><path d="M5.651 19h12.698c-.337-1.8-1.023-3.21-1.945-4.19C15.318 13.65 13.838 13 12 13s-3.317.65-4.404 1.81c-.922.98-1.608 2.39-1.945 4.19zm.486-5.56C7.627 11.85 9.648 11 12 11s4.373.85 5.863 2.44c1.477 1.58 2.366 3.8 2.632 6.46l.11 1.1H3.395l.11-1.1c.266-2.66 1.155-4.88 2.632-6.46zM12 4c-1.105 0-2 .9-2 2s.895 2 2 2 2-.9 2-2-.895-2-2-2zM8 6c0-2.21 1.791-4 4-4s4 1.79 4 4-1.791 4-4 4-4-1.79-4-4z"></path></g></svg>
+                        <span>Profile</span>
+                    </a>
+                    <button class="post-button">Post</button>
+                </nav>
+                
+                <div class="user-profile">
+                    <div class="profile-pic">
+                        <img src="https://pbs.twimg.com/profile_images/1488548719062654976/u6qfBBkF_400x400.jpg" alt="Profile">
+                    </div>
+                    <div class="profile-info">
+                        <div class="name">John Doe</div>
+                        <div class="username">@johndoe</div>
+                    </div>
+                    <div class="more-options">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" class="r-4qtqp9 r-yyyyoo r-1xvli5t r-dnmrzs r-bnwqim r-1plcrui r-lrvibr r-1hdv0qi"><g><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></g></svg>
+                    </div>
+                </div>
+            </div>
+        </aside>
 
-    <!-- Move the theme toggle button here, inside the container -->
-    <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode">
-        <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="5"></circle>
-            <line x1="12" y1="1" x2="12" y2="3"></line>
-            <line x1="12" y1="21" x2="12" y2="23"></line>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-            <line x1="1" y1="12" x2="3" y2="12"></line>
-            <line x1="21" y1="12" x2="23" y2="12"></line>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-        </svg>
-        <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-        </svg>
-    </button>
-</div>
-</header>
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="header">
+                <h1>Home</h1>
+                <div class="header-actions">
+                    <button class="icon-button">
+                        <i class="fas fa-star"></i>
+                    </button>
+                </div>
+            </div>
 
-    <main class="container">
-        <section class="filters">
+            <div class="compose-tweet">
+                <div class="compose-header">
+                    <div class="profile-pic small">
+                        <img src="https://pbs.twimg.com/profile_images/1488548719062654976/u6qfBBkF_400x400.jpg" alt="Profile">
+                    </div>
+                    <input type="text" placeholder="What's happening?">
+                </div>
+                <div class="compose-actions">
+                    <div class="action-buttons">
+                        <button class="icon-button"><i class="far fa-image"></i></button>
+                        <button class="icon-button"><i class="fas fa-poll"></i></button>
+                        <button class="icon-button"><i class="far fa-smile"></i></button>
+                        <button class="icon-button"><i class="far fa-calendar-alt"></i></button>
+                    </div>
+                    <button class="tweet-button">Post</button>
+                </div>
+            </div>
+
+            <div class="feed" id="newsFeed">
+                <!-- Tweets will be loaded here -->
+            </div>
+        </main>
+
+        <!-- Right Sidebar -->
+        <aside class="right-sidebar">
             <div class="search-bar">
-                <input type="text" placeholder="Search for news...">
-                <button>Search</button>
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="Search">
             </div>
-            <div class="topic-filters">
-                <button class="filter-btn active">All</button>
-                <button class="filter-btn">Politics</button>
-                <button class="filter-btn">Technology</button>
-                <button class="filter-btn">Health</button>
-                <button class="filter-btn">Business</button>
-                <button class="filter-btn">Science</button>
-            </div>
-        </section>
 
-        <section class="bias-legend">
-            <div class="legend-item">
-                <span class="legend-color left"></span>
-                <span>Left Leaning</span>
+            <div class="trending">
+                <h2>Trends for you</h2>
+                <div class="trending-item">
+                    <div class="category">Politics · Trending</div>
+                    <div class="trend-name">#Election2024</div>
+                    <div class="tweet-count">145K Tweets</div>
+                </div>
+                <div class="trending-item">
+                    <div class="category">Technology · Trending</div>
+                    <div class="trend-name">#AI</div>
+                    <div class="tweet-count">98.5K Tweets</div>
+                </div>
+                <div class="trending-item">
+                    <div class="category">Business & finance · Trending</div>
+                    <div class="trend-name">#Stocks</div>
+                    <div class="tweet-count">42.3K Tweets</div>
+                </div>
+                <a href="#" class="show-more">Show more</a>
             </div>
-            <div class="legend-item">
-                <span class="legend-color center"></span>
-                <span>Center</span>
-            </div>
-            <div class="legend-item">
-                <span class="legend-color right"></span>
-                <span>Right Leaning</span>
-            </div>
-        </section>
 
-        <section class="news-feed" id="newsFeed">
-            <!-- News articles will be dynamically inserted here -->
-        </section>
+            <div class="who-to-follow">
+                <h2>Who to follow</h2>
+                <div class="user-suggestion">
+                    <div class="user-info">
+                        <div class="profile-pic xsmall">
+                            <img src="https://pbs.twimg.com/profile_images/1488548719062654976/u6qfBBkF_400x400.jpg" alt="User">
+                        </div>
+                        <div>
+                            <div class="name">CNN</div>
+                            <div class="username">@CNN</div>
+                        </div>
+                    </div>
+                    <button class="follow-button">Follow</button>
+                </div>
+                <div class="user-suggestion">
+                    <div class="user-info">
+                        <div class="profile-pic xsmall">
+                            <img src="https://pbs.twimg.com/profile_images/1488548719062654976/u6qfBBkF_400x400.jpg" alt="User">
+                        </div>
+                        <div>
+                            <div class="name">Fox News</div>
+                            <div class="username">@FoxNews</div>
+                        </div>
+                    </div>
+                    <button class="follow-button">Follow</button>
+                </div>
+                <a href="#" class="show-more">Show more</a>
+            </div>
 
-        <!-- Add this inside the header, after the nav -->
-<button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode">
-    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="5"></circle>
-        <line x1="12" y1="1" x2="12" y2="3"></line>
-        <line x1="12" y1="21" x2="12" y2="23"></line>
-        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-        <line x1="1" y1="12" x2="3" y2="12"></line>
-        <line x1="21" y1="12" x2="23" y2="12"></line>
-        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-    </svg>
-    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-    </svg>
-</button>
-    </main>
+            <div class="footer-links">
+                <a href="#">Terms of Service</a>
+                <a href="#">Privacy Policy</a>
+                <a href="#">Cookie Policy</a>
+                <a href="#">Accessibility</a>
+                <a href="#">© 2024 Perspectiva</a>
+            </div>
+        </aside>
+    </div>
+
+    <script src="app.js"></script>
 
     <script src="app.js"></script>
 </body>

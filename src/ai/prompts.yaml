@@ -1,3 +1,10 @@
+summarization:
+  prompt_template: |
+    Summarize the following news article in 2-3 concise sentences. 
+    Focus on the key facts and main points:
+    
+    {article_text}
+
 dimensions:
   - name: partisan_bias
     prompt: |

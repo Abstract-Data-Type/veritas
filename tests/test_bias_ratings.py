@@ -1,15 +1,14 @@
 """
 Unit tests for bias rating analyze endpoint.
-Tests the /analyze endpoint that calls the LLM service and stores results.
+Tests the /analyze endpoint that calls the AI library functions and stores results.
 """
 
 import os
 from datetime import datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx import Response
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -139,7 +138,7 @@ class TestAnalyzeEndpoint:
         try:
             response = client.post("/bias_ratings/analyze", json={"article_id": 1})
 
-            # Should return existing rating without calling the service
+            # Should return existing rating without calling the AI function
             assert response.status_code == 200
             data = response.json()
             assert data["rating_id"] == existing_rating.rating_id
@@ -147,6 +146,84 @@ class TestAnalyzeEndpoint:
             assert data["reasoning"] == "Existing analysis"
         finally:
             app.dependency_overrides.clear()
+
+    @patch("src.ai.bias_analysis.genai.Client")
+    def test_analyze_success(self, mock_client_class, test_db, client):
+        """Test successful bias analysis - integration test with mocked Gemini API"""
+        import os
+        from src.db.sqlalchemy import get_session
+
+        # Mock the Gemini client (external API)
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+
+        mock_result = MagicMock()
+        mock_result.text = "5"  # LLM returns score as text
+        mock_client.models.generate_content.return_value = mock_result
+
+        # Set API key
+        original_key = os.environ.get("GEMINI_API_KEY")
+        os.environ["GEMINI_API_KEY"] = "test_key"
+
+        def override_get_session():
+            try:
+                yield test_db
+            finally:
+                pass
+
+        app.dependency_overrides[get_session] = override_get_session
+
+        try:
+            response = client.post("/bias_ratings/analyze", json={"article_id": 1})
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["article_id"] == 1
+            assert "rating_id" in data
+            # Verify Gemini was called (for each dimension)
+            assert mock_client.models.generate_content.call_count > 0
+        finally:
+            app.dependency_overrides.clear()
+            # Restore original key
+            if original_key:
+                os.environ["GEMINI_API_KEY"] = original_key
+            elif "GEMINI_API_KEY" in os.environ:
+                del os.environ["GEMINI_API_KEY"]
+
+    @patch("src.ai.bias_analysis.genai.Client")
+    def test_analyze_gemini_api_failure(self, mock_client_class, test_db, client):
+        """Test that Gemini API failure returns 502"""
+        import os
+        from src.db.sqlalchemy import get_session
+
+        # Mock Gemini API to raise error
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_client.models.generate_content.side_effect = Exception("API timeout")
+
+        original_key = os.environ.get("GEMINI_API_KEY")
+        os.environ["GEMINI_API_KEY"] = "test_key"
+
+        def override_get_session():
+            try:
+                yield test_db
+            finally:
+                pass
+
+        app.dependency_overrides[get_session] = override_get_session
+
+        try:
+            response = client.post("/bias_ratings/analyze", json={"article_id": 1})
+
+            assert response.status_code == 502
+            assert "Bias rating failed" in response.json()["detail"]
+        finally:
+            app.dependency_overrides.clear()
+            # Restore original key
+            if original_key:
+                os.environ["GEMINI_API_KEY"] = original_key
+            elif "GEMINI_API_KEY" in os.environ:
+                del os.environ["GEMINI_API_KEY"]
 
 
 class TestDatabaseOperations:

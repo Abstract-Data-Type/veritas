@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
@@ -5,6 +8,12 @@ from loguru import logger
 from .api.routes_articles import router as articles_router
 from .api.routes_bias_ratings import router as bias_ratings_router
 from .db.init_db import init_db
+
+# Load .env file from project root
+project_root = Path(__file__).parent.parent
+env_path = project_root / ".env"
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
 app = FastAPI(title="Veritas News API", version="1.0.0")
 

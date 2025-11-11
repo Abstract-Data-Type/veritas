@@ -2,34 +2,34 @@
 
 ## ✅ Implementation Complete
 
-### VERITAS-42: Core Summarization Microservice
-- [x] FastAPI service created (`services/summarization/main.py`)
+### VERITAS-42: AI Library
+- [x] AI library created (`src/ai/`)
+- [x] Summarization module (`src/ai/summarization.py`)
+- [x] Bias analysis module (`src/ai/bias_analysis.py`)
+- [x] Configuration module (`src/ai/config.py`)
+- [x] Prompt templates (`src/ai/prompts.yaml`)
 - [x] Gemini API integration implemented
 - [x] Input validation added (non-empty articles required)
 - [x] Error handling implemented (500, 502 status codes)
-- [x] Pydantic models for requests/responses
-- [x] Unit tests written (`services/summarization/tests/test_summarize.py`)
-- [x] Dockerfile created for containerization
-- [x] Requirements.txt with all dependencies
-- [x] README.md with usage instructions
+- [x] Unit tests written (`tests/test_ai_summarization.py`, `tests/test_ai_bias_analysis.py`)
 - [x] Loads GEMINI_API_KEY from environment or .env
-- [x] Health check endpoint at GET /
 
 ### VERITAS-43: Backend Integration
 - [x] API route created at `/bias_ratings/summarize`
 - [x] Async endpoint for non-blocking calls
-- [x] Configurable service URL via SUMMARIZATION_SERVICE_URL
+- [x] Direct library imports (no HTTP calls between services)
 - [x] Integration with main backend
-- [x] Error handling and mapping (502, 504)
-- [x] Graceful degradation when service unavailable
+- [x] Error handling and mapping (500, 502)
+- [x] Graceful degradation when API unavailable
 - [x] Integration tests (`tests/test_summarization.py`)
 - [x] Helper method in pipeline (`src/worker/pipeline.py`)
 
 ## ✅ Testing & Validation
 
 ### Unit Tests
-- [x] Summarization service tests: 7 test cases
-- [x] Backend integration tests: 5 test cases
+- [x] AI library tests: `test_ai_summarization.py`, `test_ai_bias_analysis.py`
+- [x] Backend integration tests: `test_summarization.py`, `test_bias_ratings.py`
+- [x] End-to-end tests: `test_e2e_backend.py`
 - [x] Error handling tests included
 - [x] Mock tests for external API calls
 
@@ -42,7 +42,7 @@
 
 ### Verified Working Scenarios
 ✅ Backend API running on port 8001  
-✅ Summarization service running on port 8000  
+✅ AI library integrated and working  
 ✅ End-to-end summarization working  
 ✅ Error handling working  
 ✅ Input validation working  
@@ -56,7 +56,7 @@
 - [x] `EXAMINER_GUIDE.md` - Comprehensive guide for examiners
 - [x] `FINAL_STATUS.md` - Implementation status summary
 - [x] `TEST_SUMMARIZATION.md` - Testing guide
-- [x] `services/summarization/README.md` - Service-specific docs
+- [x] `docs/implementation/05-REFACTOR-AI-TO-LIBRARY.md` - Refactoring documentation
 - [x] `.env.example` - Environment variable template
 - [x] Inline code comments explaining implementation
 
@@ -94,7 +94,7 @@
 
 ## ✅ Architecture
 
-- [x] Microservices architecture
+- [x] Library-based architecture (AI functions in `src/ai/`)
 - [x] Separation of concerns
 - [x] Scalable design
 - [x] Configuration via environment variables
@@ -103,7 +103,7 @@
 
 ## ✅ Dependencies
 
-### Main Project
+### Main Project (includes AI library)
 - fastapi==0.104.1
 - uvicorn==0.24.0
 - google-genai==0.3.0
@@ -111,22 +111,14 @@
 - pydantic
 - loguru
 - python-dotenv
+- pyyaml (for prompts.yaml)
 - + others for backend
-
-### Summarization Service
-- fastapi==0.115.0
-- uvicorn==0.30.6
-- google-genai==0.3.0
-- httpx==0.27.2
-- pydantic==2.9.2
-- python-dotenv==1.0.0
 
 ## ✅ Configuration
 
 Environment variables (.env):
 ```
 GEMINI_API_KEY=your-actual-key
-SUMMARIZATION_SERVICE_URL=http://localhost:8000
 DB_PATH=./veritas_news.db
 LOG_LEVEL=INFO
 API_HOST=0.0.0.0
@@ -137,7 +129,7 @@ API_PORT=8001
 
 1. **Read EXAMINER_GUIDE.md** for complete testing instructions
 2. **Review code structure** - see FILES section above
-3. **Run tests** - pytest tests/ and cd services/summarization && pytest tests/
+3. **Run tests** - pytest tests/ (includes AI library tests)
 4. **Test manually** - follow EXAMINER_GUIDE steps 1-4
 5. **Check commits** - all include Linear ticket IDs
 6. **Verify git workflow** - proper feature branch use
@@ -146,13 +138,14 @@ API_PORT=8001
 
 | Item | Status | Location |
 |------|--------|----------|
-| Microservice | ✅ Complete | `services/summarization/` |
+| AI Library | ✅ Complete | `src/ai/` |
 | Backend Integration | ✅ Complete | `src/api/routes_bias_ratings.py` |
-| Unit Tests | ✅ Complete | `tests/test_summarization.py` |
-| Integration Tests | ✅ Complete | `services/summarization/tests/` |
+| Unit Tests | ✅ Complete | `tests/test_ai_*.py` |
+| Integration Tests | ✅ Complete | `tests/test_summarization.py`, `tests/test_bias_ratings.py` |
+| E2E Tests | ✅ Complete | `tests/test_e2e_backend.py` |
 | Documentation | ✅ Complete | Multiple .md files |
-| Git Commits | ✅ Complete | 9 commits with ticket IDs |
-| Error Handling | ✅ Complete | 502, 504, 400, 422 responses |
+| Git Commits | ✅ Complete | Commits with ticket IDs |
+| Error Handling | ✅ Complete | 500, 502, 400, 422 responses |
 | Working Implementation | ✅ Tested | Verified end-to-end |
 
 ## Next Steps

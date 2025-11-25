@@ -1,0 +1,28 @@
+{
+  "name": "veritasnews-project-1",
+  "version": "1.0.0",
+  "description": "For comprehensive documentation including setup, testing, and implementation details, see the **[docs/](docs/)** folder:",
+  "main": "App.test.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cs1060f25/veritasnews-project.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/cs1060f25/veritasnews-project/issues"
+  },
+  "homepage": "https://github.com/cs1060f25/veritasnews-project#readme",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0"
+  }
+}

@@ -174,9 +174,9 @@ class TestArticlesLatestEndpoint:
     def test_filter_by_date_range(self, client, sample_articles):
         """Test filtering articles by date range"""
         from urllib.parse import quote
-        
+
         now = datetime.now(timezone.utc)
-        
+
         # Get articles from last 3 days
         start_date = (now - timedelta(days=3)).isoformat()
         response = client.get(f"/articles/latest?start_date={quote(start_date)}")
@@ -186,7 +186,7 @@ class TestArticlesLatestEndpoint:
 
         # Should only get the 2 recent articles (2 hours and 1 hour ago)
         assert data["total"] == 2
-        
+
         # Get articles older than 5 days
         end_date = (now - timedelta(days=5)).isoformat()
         response = client.get(f"/articles/latest?end_date={quote(end_date)}")
@@ -200,9 +200,7 @@ class TestArticlesLatestEndpoint:
     def test_filter_by_bias_score(self, client, sample_articles):
         """Test filtering articles by bias score range"""
         # Get neutral articles (bias score between -0.3 and 0.3)
-        response = client.get(
-            "/articles/latest?min_bias_score=-0.3&max_bias_score=0.3"
-        )
+        response = client.get("/articles/latest?min_bias_score=-0.3&max_bias_score=0.3")
 
         assert response.status_code == 200
         data = response.json()
@@ -257,7 +255,7 @@ class TestArticlesLatestEndpoint:
     def test_combined_filters(self, client, sample_articles):
         """Test combining multiple filters"""
         from urllib.parse import quote
-        
+
         now = datetime.now(timezone.utc)
         start_date = (now - timedelta(days=10)).isoformat()
 
@@ -276,9 +274,7 @@ class TestArticlesLatestEndpoint:
     def test_empty_results(self, client, sample_articles):
         """Test that endpoint handles no matching results gracefully"""
         # Query for impossible bias score range
-        response = client.get(
-            "/articles/latest?min_bias_score=0.9&max_bias_score=1.0"
-        )
+        response = client.get("/articles/latest?min_bias_score=0.9&max_bias_score=1.0")
 
         assert response.status_code == 200
         data = response.json()

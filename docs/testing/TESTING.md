@@ -1,46 +1,49 @@
 # Testing the Summarization Feature
 
-## Problem: Service Timeout
+## Quick Setup
 
-You're getting `{"detail":"Summarization service timeout"}` because the summarization microservice isn't running properly.
+The backend now includes the AI library (`src/ai/`) which handles summarization directly - no separate service needed!
 
-## Quick Fix: Manual Setup
-
-Open TWO separate terminals:
-
-### Terminal 1: Summarization Service
+### Setup
 ```bash
-cd /Users/yanncalvolopez/veritasnews-project/services/summarization
-python3 -m venv venv
+cd /Users/yanncalvolopez/veritasnews-project
 source venv/bin/activate
-pip install fastapi uvicorn google-genai httpx pydantic
 export GEMINI_API_KEY="YOUR_GEMINI_API_KEY_HERE"
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-You should see:
-```
-INFO:     Uvicorn running on http://0.0.0.0:8000
-```
-
-### Terminal 2: Test the API
+### Test the API
 ```bash
 curl -X POST http://localhost:8001/bias_ratings/summarize \
   -H "Content-Type: application/json" \
   -d '{"article_text": "Your article text here"}'
 ```
 
-## Alternative: Bypass the Microservice
+## Running Tests
 
-Since the microservice requires Gemini API setup, you can test the backend integration using mocks. For now, the implementation is complete and tested with unit tests.
+### Unit Tests (AI Library)
+```bash
+pytest tests/test_ai_summarization.py -v
+pytest tests/test_ai_bias_analysis.py -v
+```
 
-The error handling is working correctly - it's detecting that the microservice isn't running and returning the appropriate error.
+### Integration Tests
+```bash
+pytest tests/test_summarization.py -v
+pytest tests/test_bias_ratings.py -v
+```
+
+### End-to-End Tests
+```bash
+pytest tests/test_e2e_backend.py -v -m e2e
+```
 
 ## Status
 
 ✅ Backend API: Running on port 8001
 ✅ Summarization Endpoint: Implemented at `/bias_ratings/summarize`
-✅ Error Handling: Working (returns timeout when service unavailable)
-⚠️ Summarization Service: Needs to be started separately with Gemini API key
+✅ AI Library: `src/ai/` handles summarization and bias analysis
+✅ Error Handling: Working (returns 500 when API key missing, 502 for API failures)
+✅ Tests: Comprehensive unit, integration, and e2e tests
 
-The implementation is **complete** - you just need to start the summarization service with a valid Gemini API key.
+The implementation is **complete** - just set `GEMINI_API_KEY` and start the backend!

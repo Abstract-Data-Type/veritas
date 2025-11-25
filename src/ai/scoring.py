@@ -18,3 +18,4 @@ def score_bias(raw_scores: Dict[str, float]) -> Dict[str, float]:
     """
     # Simple pass-through implementation
     return raw_scores.copy()
+

@@ -29,38 +29,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Step 3: Setup the Summarization Microservice
-
-Open a **new terminal** and run:
-
-```bash
-cd /path/to/veritasnews-project/services/summarization
-
-# Create venv if needed
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Set your Gemini API key
-export GEMINI_API_KEY="paste-your-key-here"
-
-# Start the service
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-**Expected output:**
-```
-INFO:     Uvicorn running on http://0.0.0.0:8000
-INFO:     Application startup complete
-```
-
-✅ Service is running at http://localhost:8000
-
-## Step 4: Setup the Main Backend API
-
-Open **another terminal** and run:
+## Step 3: Setup the Main Backend API
 
 ```bash
 cd /path/to/veritasnews-project
@@ -68,8 +37,8 @@ cd /path/to/veritasnews-project
 # Activate your venv (from Step 2)
 source venv/bin/activate
 
-# Set environment variables
-export SUMMARIZATION_SERVICE_URL=http://localhost:8000
+# Set your Gemini API key
+export GEMINI_API_KEY="paste-your-key-here"
 
 # Start the backend
 python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8001
@@ -83,7 +52,9 @@ INFO:     Application startup complete
 
 ✅ Backend API is running at http://localhost:8001
 
-## Step 5: Test the Summarization Endpoint
+The backend now includes the AI library (`src/ai/`) which handles summarization and bias analysis directly - no separate service needed!
+
+## Step 4: Test the Summarization Endpoint
 
 Open a **third terminal** and run:
 
@@ -104,17 +75,71 @@ curl -X POST http://localhost:8001/bias_ratings/summarize \
 
 ✅ Summarization is working!
 
+## Step 5: Test the Bias Analysis Endpoint
+
+**Note:** Bias analysis requires an article to exist in the database first. You'll need to create an article or use an existing one.
+
+### Option A: Test with an existing article (if you have articles in your database)
+
+```bash
+# First, check what articles exist (if you have a GET endpoint)
+# Or create an article via your worker/API
+
+# Then analyze it for bias
+curl -X POST http://localhost:8001/bias_ratings/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"article_id": 1}'
+```
+
+**Expected response:**
+```json
+{
+  "rating_id": 1,
+  "article_id": 1,
+  "bias_score": 0.0,
+  "reasoning": "",
+  "scores": {
+    "partisan_bias": 4.0,
+    "affective_bias": 3.5,
+    "framing_bias": 4.2,
+    "sourcing_bias": 5.0
+  }
+}
+```
+
+### Option B: Create an article first, then analyze it
+
+```bash
+# Step 1: Create an article (example - adjust based on your article creation endpoint)
+# This is just an example - you may need to use your actual article creation endpoint
+
+# Step 2: Analyze the article for bias
+curl -X POST http://localhost:8001/bias_ratings/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"article_id": 1}'
+```
+
+**What the bias analysis returns:**
+- `scores`: A dictionary with 4 bias dimensions, each scored 1.0-7.0:
+  - `partisan_bias`: Explicit political alignment (1=Left, 4=Neutral, 7=Right)
+  - `affective_bias`: Emotional language intensity (1=Neutral, 7=Highly emotional)
+  - `framing_bias`: Narrative framing perspective (1=Left-leaning, 4=Balanced, 7=Right-leaning)
+  - `sourcing_bias`: Source diversity (1=One-sided, 7=Wide diversity)
+- `bias_score`: Currently returns 0.0 (single composite score not yet implemented)
+- `rating_id`: Database ID of the stored rating
+
+✅ Bias analysis is working!
+
 ## Step 6: Run Tests
 
 In your main terminal:
 
 ```bash
-# Test the summarization service
-cd services/summarization
-pytest tests/test_summarize.py -v
+# Test the AI library functions
+pytest tests/test_ai_summarization.py -v
+pytest tests/test_ai_bias_analysis.py -v
 
 # Test the backend integration
-cd ../..
 pytest tests/test_summarization.py -v
 
 # Run all tests
@@ -147,17 +172,21 @@ curl -X POST http://localhost:8001/bias_ratings/summarize \
 ```
 Expected: 422 Unprocessable Entity
 
-### Scenario 3: Service Down (Should handle gracefully)
-1. Stop the summarization service (Ctrl+C in Terminal 1)
-2. Run this curl:
+### Scenario 3: Missing API Key (Should handle gracefully)
+1. Stop the backend (Ctrl+C)
+2. Start without GEMINI_API_KEY:
+```bash
+python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8001
+```
+3. Run this curl:
 ```bash
 curl -X POST http://localhost:8001/bias_ratings/summarize \
   -H "Content-Type: application/json" \
   -d '{"article_text": "Your article here..."}'
 ```
-Expected: 502 Bad Gateway with error message
+Expected: 500 Internal Server Error with "GEMINI_API_KEY not configured"
 
-3. Restart the summarization service to continue testing
+4. Restart with API key to continue testing
 
 ### Scenario 4: Very Long Article
 ```bash
@@ -178,61 +207,52 @@ curl -X POST http://localhost:8001/bias_ratings/summarize \
 
 ### Health Check
 ```bash
-curl http://localhost:8000/  # Summarization service
 curl http://localhost:8001/  # Main backend
 ```
 
 ### Interactive API Docs
-- Summarization Service: http://localhost:8000/docs
 - Main Backend: http://localhost:8001/docs
 
 ## Troubleshooting
 
-### Issue: "Connection refused" when calling backend
-**Solution:** Make sure the summarization service is running
-```bash
-# Check if service is running
-curl http://localhost:8000/
-```
-
 ### Issue: "GEMINI_API_KEY not configured" error
-**Solution:** Set the environment variable before starting the service
+**Solution:** Set the environment variable before starting the backend
 ```bash
 export GEMINI_API_KEY="your-actual-key"
-# Then restart the service
+# Then restart the backend
 ```
 
 ### Issue: Timeout errors
 **Solution:** The Gemini API might be slow. Try with a shorter article first.
 
-### Issue: "Cannot reach summarization service"
+### Issue: "502 Bad Gateway" or "Upstream service failure"
 **Solution:** 
-1. Check the service is running on port 8000
-2. Check the `SUMMARIZATION_SERVICE_URL` is set correctly
-3. Try: `curl http://localhost:8000/`
+1. Check that GEMINI_API_KEY is set correctly
+2. Verify the API key is valid at https://aistudio.google.com/app/apikey
+3. Check backend logs for detailed error messages
 
 ## Architecture Overview
 
 ```
-┌─ Terminal 1 ─────────────────────────────────────┐
-│ Summarization Microservice (Port 8000)           │
-│ ├─ POST /summarize                              │
-│ └─ GET /  (health check)                        │
-└──────────────────────┬──────────────────────────┘
-                       │
-                       │ (async HTTP call)
-                       │
-┌─ Terminal 2 ─────────▼──────────────────────────┐
-│ Main Backend API (Port 8001)                    │
-│ ├─ POST /bias_ratings/summarize (VERITAS-43)   │
+┌─ Backend API (Port 8001) ───────────────────────┐
+│ Main FastAPI Application                        │
+│ ├─ POST /bias_ratings/summarize                │
+│ ├─ POST /bias_ratings/analyze                  │
 │ ├─ GET /bias_ratings/                          │
 │ └─ GET /  (health check)                       │
-└──────────────────────────────────────────────────┘
+│                                                  │
+│ ┌────────────────────────────────────────────┐ │
+│ │ AI Library (src/ai/)                       │ │
+│ │ ├─ summarization.py → Gemini API           │ │
+│ │ ├─ bias_analysis.py → Gemini API           │ │
+│ │ └─ config.py (prompts.yaml)                │ │
+│ └────────────────────────────────────────────┘ │
+└──────────────────────┬──────────────────────────┘
                        ▲
                        │
                        │ (HTTP requests)
                        │
-         ┌─ Terminal 3 (Your client)
+         ┌─ Your client
          │ ├─ curl / Postman / Web Browser
          │ └─ pytest / Integration tests
          └──────────────────────────────────────
@@ -248,10 +268,9 @@ export GEMINI_API_KEY="your-actual-key"
 
 ## Files to Review
 
-- 📄 `IMPLEMENTATION_PLAN.md` - Full technical specification
-- 📄 `IMPLEMENTATION_SUMMARY.md` - What was implemented
+- 📄 `docs/implementation/` - Implementation plans and summaries
 - 📄 `README.md` - Comprehensive documentation
-- 📁 `services/summarization/` - The microservice code
+- 📁 `src/ai/` - AI library (summarization & bias analysis)
 - 📁 `src/api/` - Backend API routes
 - 📁 `tests/` - Test suites
 
@@ -264,10 +283,10 @@ export GEMINI_API_KEY="your-actual-key"
 ## Success Indicators
 
 ✅ You've successfully completed the setup when you see:
-- [ ] Summarization service running on http://localhost:8000
 - [ ] Backend API running on http://localhost:8001
 - [ ] Successful summarization request returns a summary
-- [ ] Error handling works (service down, invalid input, etc.)
+- [ ] Error handling works (missing API key, invalid input, etc.)
 - [ ] Tests pass: `pytest tests/test_summarization.py -v`
+- [ ] AI library tests pass: `pytest tests/test_ai_summarization.py -v`
 
 **Great job! The AI Article Summarization feature is ready to use!** 🎉

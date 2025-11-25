@@ -1,11 +1,10 @@
-import os
 import sqlite3
 from datetime import datetime
 from typing import List, Optional, Set
 
-import httpx
 from loguru import logger
 
+from ..ai import summarize_with_gemini
 from ..db.init_db import get_connection
 from .fetchers import ArticleData
 
@@ -15,13 +14,10 @@ class ArticlePipeline:
 
     def __init__(self):
         self._processed_urls: Set[str] = set()
-        self.summarization_service_url = os.environ.get(
-            "SUMMARIZATION_SERVICE_URL", "http://localhost:8000"
-        )
 
     async def _get_article_summary(self, article_text: str) -> Optional[str]:
         """
-        Get a summary of the article text from the summarization service.
+        Get a summary of the article text using the AI library.
 
         Args:
             article_text: The full text of the article
@@ -34,31 +30,18 @@ class ArticlePipeline:
             return None
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    f"{self.summarization_service_url}/summarize",
-                    json={"article_text": article_text},
-                )
+            # Call summarization function directly
+            summary = summarize_with_gemini(article_text)
+            if summary:
+                logger.debug(f"Generated summary: {summary[:100]}...")
+                return summary
+            else:
+                logger.warning("Summarization returned empty summary")
+                return None
 
-                if response.status_code == 200:
-                    data = response.json()
-                    summary = data.get("summary", "")
-                    logger.debug(f"Generated summary: {summary[:100]}...")
-                    return summary
-                else:
-                    logger.warning(
-                        f"Summarization service returned {response.status_code}"
-                    )
-                    return None
-
-        except httpx.TimeoutException:
-            logger.warning("Summarization service timeout, continuing without summary")
-            return None
-        except httpx.RequestError as e:
-            logger.warning(f"Cannot reach summarization service: {e}")
-            return None
         except Exception as e:
-            logger.error(f"Error getting summary: {e}")
+            # Gracefully handle errors - return None so pipeline continues
+            logger.warning(f"Error getting summary: {e}, continuing without summary")
             return None
 
     def _normalize_article(self, article: ArticleData) -> ArticleData:

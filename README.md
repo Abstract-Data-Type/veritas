@@ -61,28 +61,12 @@ Does the article portray any underlying values (individual freedom, social justi
 
 ## Running the Application
 
-### 1. Start the Summarization Microservice
+### 1. Start the Main Backend API
 
-In a new terminal:
-```bash
-cd services/summarization
-source venv/bin/activate  # Or create venv if not done
-python3 -m pip install -r requirements.txt
-export GEMINI_API_KEY="your-key-here"
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-The service will be available at `http://localhost:8000`
-- Docs: http://localhost:8000/docs
-- Health: http://localhost:8000/
-
-### 2. Start the Main Backend API
-
-In another terminal:
 ```bash
 cd veritasnews-project
 source venv/bin/activate
-export SUMMARIZATION_SERVICE_URL=http://localhost:8000
+export GEMINI_API_KEY="your-key-here"
 python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
@@ -122,15 +106,10 @@ python -m pytest tests/ --cov=src --cov-report=html
 
 ### Services
 
-1. **Summarization Microservice** (`services/summarization/`)
-   - FastAPI-based standalone service
-   - Calls Google Gemini API to generate article summaries
-   - Provides POST /summarize endpoint
-   - Graceful error handling with 502 responses for upstream failures
-
-2. **Main Backend API** (`src/`)
+1. **Main Backend API** (`src/`)
    - FastAPI application for managing bias ratings and articles
-   - Includes summarization integration at `/bias_ratings/summarize`
+   - Includes AI library (`src/ai/`) for summarization and bias analysis
+   - Calls Google Gemini API directly via the AI library
    - Database: SQLite with articles and bias ratings tables
    - Worker: Background news scraping and processing
 
@@ -138,13 +117,13 @@ python -m pytest tests/ --cov=src --cov-report=html
 
 ```
 veritasnews-project/
-├── services/
-│   └── summarization/          # Summarization microservice
-│       ├── main.py
-│       ├── requirements.txt
-│       ├── Dockerfile
-│       └── tests/
 ├── src/
+│   ├── ai/                     # AI library (summarization & bias analysis)
+│   │   ├── summarization.py
+│   │   ├── bias_analysis.py
+│   │   ├── config.py
+│   │   ├── scoring.py
+│   │   └── prompts.yaml
 │   ├── api/                    # FastAPI routes
 │   │   └── routes_bias_ratings.py
 │   ├── db/                     # Database operations
@@ -161,7 +140,10 @@ veritasnews-project/
 ├── tests/                      # Test suite
 │   ├── test_bias_ratings.py
 │   ├── test_init_db.py
-│   └── test_summarization.py
+│   ├── test_summarization.py
+│   ├── test_ai_summarization.py
+│   ├── test_ai_bias_analysis.py
+│   └── test_e2e_backend.py
 ├── requirements.txt
 ├── .env.example
 └── IMPLEMENTATION_PLAN.md
@@ -172,8 +154,7 @@ veritasnews-project/
 All configuration is managed via environment variables. See `.env.example` for available options:
 
 - `DB_PATH`: Path to SQLite database
-- `SUMMARIZATION_SERVICE_URL`: URL of summarization microservice
-- `GEMINI_API_KEY`: Google Gemini API key
+- `GEMINI_API_KEY`: Google Gemini API key (required for AI features)
 - `LOG_LEVEL`: Logging level (DEBUG, INFO, WARNING, ERROR)
 - `API_HOST` / `API_PORT`: API server configuration
 - `WORKER_ENABLED`: Enable background worker
@@ -195,15 +176,11 @@ All work is tracked in Linear. Commit messages must include the Linear ticket ID
 
 ## Troubleshooting
 
-### Summarization service connection error
-- Check that summarization service is running: `curl http://localhost:8000/`
-- Verify `SUMMARIZATION_SERVICE_URL` environment variable is set correctly
-- Check logs for connection timeout issues
-
 ### GEMINI_API_KEY not configured
 - Ensure you've set the `GEMINI_API_KEY` environment variable
-- For the summarization service: `export GEMINI_API_KEY="your-key"`
+- Export it before starting the backend: `export GEMINI_API_KEY="your-key"`
 - Verify the key is valid at https://aistudio.google.com/app/apikey
+- The AI library (`src/ai/`) requires this key for summarization and bias analysis
 
 ### Database errors
 - Delete `veritas_news.db` to reset

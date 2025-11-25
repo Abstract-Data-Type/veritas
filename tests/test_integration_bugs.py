@@ -2,90 +2,13 @@
 Integration tests to identify bugs in the main backend's summarization integration
 """
 
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.db.sqlalchemy import Base
-from src.main import app
-
-client = TestClient(app)
-
-
-class TestBackendSummarizationBugs:
-    """Test potential bugs in backend summarization integration"""
-
-    def test_summarization_service_url_not_set(self):
-        """BUG: What if SUMMARIZATION_SERVICE_URL is not set?"""
-        # Remove the env var if it exists
-        with patch.dict(os.environ, {}, clear=True):
-            with patch("src.api.routes_bias_ratings.httpx.AsyncClient") as mock_client:
-                # Create async context manager mock
-                mock_instance = MagicMock()
-                mock_client.return_value.__aenter__.return_value = mock_instance
-                mock_client.return_value.__aexit__.return_value = AsyncMock()
-
-                # Mock successful response - make post return an awaitable
-                mock_response = MagicMock()
-                mock_response.status_code = 200
-                mock_response.json.return_value = {"summary": "Test summary"}
-                mock_instance.post = AsyncMock(return_value=mock_response)
-
-                response = client.post(
-                    "/bias_ratings/summarize", json={"article_text": "Test article"}
-                )
-
-                # Should use default localhost:8000
-                # Check if it at least tries to connect
-                assert response.status_code in [200, 502, 504]
-
-    def test_summarization_with_very_short_text(self):
-        """Test with very short article text"""
-        with patch("src.api.routes_bias_ratings.httpx.AsyncClient") as mock_client:
-            mock_instance = MagicMock()
-            mock_client.return_value.__aenter__.return_value = mock_instance
-            mock_client.return_value.__aexit__.return_value = AsyncMock()
-
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {"summary": "Short."}
-            mock_instance.post = AsyncMock(return_value=mock_response)
-
-            response = client.post(
-                "/bias_ratings/summarize", json={"article_text": "Hi"}
-            )
-
-            # Should work but might not be useful
-            assert response.status_code in [200, 400]
-
-    def test_summarization_service_url_with_trailing_slash(self):
-        """BUG: Service URL with trailing slash causes double slash"""
-        with patch.dict(
-            os.environ, {"SUMMARIZATION_SERVICE_URL": "http://localhost:8000/"}
-        ):
-            with patch("src.api.routes_bias_ratings.httpx.AsyncClient") as mock_client:
-                mock_instance = MagicMock()
-                mock_client.return_value.__aenter__.return_value = mock_instance
-                mock_client.return_value.__aexit__.return_value = AsyncMock()
-
-                mock_response = MagicMock()
-                mock_response.status_code = 200
-                mock_response.json.return_value = {"summary": "Test"}
-                mock_instance.post = AsyncMock(return_value=mock_response)
-
-                response = client.post(
-                    "/bias_ratings/summarize", json={"article_text": "Test article"}
-                )
-
-                # Check if URL was constructed correctly
-                # Current code does f"{url}/summarize" which creates double slash
-                # This might work but is not clean
-                assert response.status_code in [200, 502]
 
 
 class TestPipelineIntegrationBugs:
@@ -132,20 +55,18 @@ class TestPipelineIntegrationBugs:
         # Exactly 50 characters
         text_50 = "a" * 50
 
-        with patch("src.api.routes_bias_ratings.httpx.AsyncClient") as mock_client:
-            mock_instance = MagicMock()
-            mock_client.return_value.__aenter__.return_value = mock_instance
-
-            mock_response = AsyncMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {"summary": "Summary"}
-            mock_instance.post.return_value = mock_response
+        # Mock the AI library function where it's imported in the pipeline module
+        with patch("src.worker.pipeline.summarize_with_gemini") as mock_summarize:
+            mock_summarize.return_value = "Summary of fifty character text"
 
             summary = await pipeline._get_article_summary(text_50)
 
-            # Should process (>= 50 chars after strip)
-            # BUG: Current code checks < 50, so 50 should work
-            assert summary is not None or summary is None  # Depends on implementation
+            # Should process since it's >= 50 chars (not < 50)
+            # The pipeline checks: if len(article_text.strip()) < 50: return None
+            # So 50 chars should be processed
+            assert summary is not None
+            assert summary == "Summary of fifty character text"
+            mock_summarize.assert_called_once_with(text_50)
 
 
 if __name__ == "__main__":

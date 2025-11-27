@@ -1,9 +1,16 @@
 
+# Load .env file from project root
+from pathlib import Path
+from dotenv import load_dotenv
+
+project_root = Path(__file__).parent.parent
+env_path = project_root / ".env"
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+
 import asyncio
 import os
 from contextlib import asynccontextmanager
-from pathlib import Path
-from dotenv import load_dotenv
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -47,13 +54,7 @@ async def lifespan(app: FastAPI):
 
         news_worker = NewsWorker(hours_back=hours_back, limit=limit)
 
-# Load .env file from project root
-project_root = Path(__file__).parent.parent
-env_path = project_root / ".env"
-if env_path.exists():
-    load_dotenv(dotenv_path=env_path)
-
-    # Determine which fetch method to use
+        # Determine which fetch method to use
         async def worker_loop():
             while news_worker.running:
                 try:

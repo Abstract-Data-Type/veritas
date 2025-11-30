@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Veritas News - Unbiased News Aggregator</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="site-header">
+        <div class="header-top">
+            <button class="menu-button" id="menu-button">
+                <i class="fas fa-bars"></i>
+            </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Category Navigation -->
+        <nav class="category-nav">
+            <ul>
+                <li><a href="#" class="active">For You</a></li>
+                <li><a href="#">Politics</a></li>
+                <li><a href="#">Technology</a></li>
+                <li><a href="#">Business</a></li>
+                <li><a href="#">Health</a></li>
+                <li><a href="#">Science</a></li>
+                <li><a href="#">Entertainment</a></li>
+            </ul>
+        </nav>
+
+        <!-- Loading Indicator -->
+        <div id="loading-indicator" class="loading-indicator">
+            <div class="spinner"></div>
+            <p>Loading latest news...</p>
+        </div>
+
+        <!-- Error Message -->
+        <div id="error-message" class="error-message" style="display: none;">
+            <p>Failed to load news. Please try again later.</p>
+            <button id="retry-button" class="retry-button">Retry</button>
+        </div>
+
+        <!-- News Feed -->
+        <div id="news-feed" class="news-feed">
+            <!-- Articles will be inserted here by JavaScript -->
+        </div>
+
+        <!-- Load More Button -->
+        <div class="load-more-container">
+            <button id="load-more" class="load-more-button">Load More</button>
+        </div>
+    </main>
+
+    <script src="news-feed.js"></script>
+    <script>
+        // Add event listener for retry button
+        document.getElementById('retry-button').addEventListener('click', () => {
+            window.location.reload();
+        });
+    </script>
+</body>
+</html>

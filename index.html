@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,15 +10,21 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root {
-            --primary-color: #A51C30; /* Harvard Crimson */
-            --primary-dark: #7a1424;  /* Darker shade for hover states */
-            --primary-light: #d47b8b; /* Lighter shade for accents */
-            --background: #f8f5f2;    /* Slightly off-white background */
+            --primary-color: #A51C30;
+            /* Harvard Crimson */
+            --primary-dark: #7a1424;
+            /* Darker shade for hover states */
+            --primary-light: #d47b8b;
+            /* Lighter shade for accents */
+            --background: #f8f5f2;
+            /* Slightly off-white background */
             --card-bg: #ffffff;
             --text-primary: #222222;
             --text-secondary: #555555;
-            --border-color: #e0d6d1;  /* Subtle border color */
-            --tag-bg: #f0e6e8;       /* Light crimson for tags */
+            --border-color: #e0d6d1;
+            /* Subtle border color */
+            --tag-bg: #f0e6e8;
+            /* Light crimson for tags */
         }
 
         * {
@@ -78,24 +85,42 @@
             margin: 1rem auto;
             max-width: 600px;
             width: 100%;
+            position: relative;
+            z-index: 10;
+            /* Ensure it's above other elements */
         }
 
         .search-bar input {
             width: 100%;
             padding: 0.85rem 1.25rem;
-            border: 0.5px solid var(--primary-color);
+            border: 1px solid var(--border-color);
+            /* Slightly more visible border */
             border-radius: 50px;
             font-size: 0.95rem;
             outline: none;
             transition: all 0.2s ease;
             background-color: white;
-            -webkit-appearance: none; /* Removes default styling on iOS */
+            -webkit-appearance: none;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            /* Subtle shadow for depth */
         }
-        
+
         .search-bar input:focus {
             border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px rgba(165, 28, 48, 0.1);
+            box-shadow: 0 0 0 3px rgba(165, 28, 48, 0.15);
             background-color: white;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .categories {
@@ -123,9 +148,9 @@
             color: white;
             border-color: var(--primary-color);
             transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        
+
         .category-btn:active {
             transform: translateY(0);
             box-shadow: none;
@@ -236,33 +261,35 @@
                 border-radius: 0;
                 padding: 1.5rem 1rem;
             }
+
             .articles-grid {
                 grid-template-columns: 1fr;
             }
-            
+
             .categories {
                 overflow-x: auto;
                 padding-bottom: 0.5rem;
                 -webkit-overflow-scrolling: touch;
             }
-            
+
             .categories::-webkit-scrollbar {
                 display: none;
             }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <header>
             <div class="header-content">
                 <div class="logo">Veritas News</div>
                 <div class="tagline">Unbiased news aggregation with AI-powered bias detection</div>
-                
+
                 <div class="search-bar">
                     <input type="text" placeholder="Search articles...">
                 </div>
-                
+
                 <div class="categories">
                     <button class="category-btn active">All News</button>
                     <button class="category-btn">Politics</button>
@@ -283,9 +310,11 @@
                         <span class="tag">ASSOCIATED PRESS</span>
                     </div>
                     <div class="article-content">
-                        <h3 class="article-title">Global Leaders Gather for Climate Summit as Scientists Warn of Tipping Points</h3>
+                        <h3 class="article-title">Global Leaders Gather for Climate Summit as Scientists Warn of Tipping
+                            Points</h3>
                         <div class="article-meta">2025-10-15 20:22:52</div>
-                        <p class="article-summary">World leaders meet to discuss urgent climate action as new reports highlight accelerating climate change impacts.</p>
+                        <p class="article-summary">World leaders meet to discuss urgent climate action as new reports
+                            highlight accelerating climate change impacts.</p>
                         <a href="#" class="read-more">Read Full Article <i class="fas fa-chevron-right"></i></a>
                     </div>
                 </article>
@@ -297,9 +326,11 @@
                         <span class="tag">TECHCRUNCH</span>
                     </div>
                     <div class="article-content">
-                        <h3 class="article-title">New AI Breakthrough Promises to Revolutionize Healthcare Diagnostics</h3>
+                        <h3 class="article-title">New AI Breakthrough Promises to Revolutionize Healthcare Diagnostics
+                        </h3>
                         <div class="article-meta">2025-10-15 18:45:30</div>
-                        <p class="article-summary">Researchers develop AI system that can detect early signs of diseases with 95% accuracy.</p>
+                        <p class="article-summary">Researchers develop AI system that can detect early signs of diseases
+                            with 95% accuracy.</p>
                         <a href="#" class="read-more">Read Full Article <i class="fas fa-chevron-right"></i></a>
                     </div>
                 </article>
@@ -313,7 +344,8 @@
                     <div class="article-content">
                         <h3 class="article-title">Stock Markets Reach Record Highs Amid Economic Recovery</h3>
                         <div class="article-meta">2025-10-15 16:30:15</div>
-                        <p class="article-summary">Global markets surge as economic indicators show strong post-pandemic recovery.</p>
+                        <p class="article-summary">Global markets surge as economic indicators show strong post-pandemic
+                            recovery.</p>
                         <a href="#" class="read-more">Read Full Article <i class="fas fa-chevron-right"></i></a>
                     </div>
                 </article>
@@ -327,7 +359,8 @@
                     <div class="article-content">
                         <h3 class="article-title">Bipartisan Infrastructure Bill Passes Senate in Key Vote</h3>
                         <div class="article-meta">2025-10-15 14:15:42</div>
-                        <p class="article-summary">Landmark legislation secures funding for nationwide infrastructure improvements.</p>
+                        <p class="article-summary">Landmark legislation secures funding for nationwide infrastructure
+                            improvements.</p>
                         <a href="#" class="read-more">Read Full Article <i class="fas fa-chevron-right"></i></a>
                     </div>
                 </article>
@@ -341,7 +374,8 @@
                     <div class="article-content">
                         <h3 class="article-title">Researchers Discover New Species in Unexplored Amazon Region</h3>
                         <div class="article-meta">2025-10-15 12:05:18</div>
-                        <p class="article-summary">Expedition uncovers dozens of previously unknown species in remote Amazon rainforest.</p>
+                        <p class="article-summary">Expedition uncovers dozens of previously unknown species in remote
+                            Amazon rainforest.</p>
                         <a href="#" class="read-more">Read Full Article <i class="fas fa-chevron-right"></i></a>
                     </div>
                 </article>
@@ -355,7 +389,8 @@
                     <div class="article-content">
                         <h3 class="article-title">New Study Links Exercise to Improved Mental Health Outcomes</h3>
                         <div class="article-meta">2025-10-15 10:30:55</div>
-                        <p class="article-summary">Research shows 30 minutes of daily exercise can reduce symptoms of anxiety and depression.</p>
+                        <p class="article-summary">Research shows 30 minutes of daily exercise can reduce symptoms of
+                            anxiety and depression.</p>
                         <a href="#" class="read-more">Read Full Article <i class="fas fa-chevron-right"></i></a>
                     </div>
                 </article>
@@ -375,18 +410,60 @@
         });
 
         // Search functionality
+        function performSearch() {
+            const searchInput = document.querySelector('.search-bar input');
+            const articles = document.querySelectorAll('.article-card');
+            const searchTerm = searchInput.value.toLowerCase().trim();
+
+            if (searchTerm === '') {
+                articles.forEach(article => {
+                    // Explicitly set to block to ensure visibility
+                    article.style.display = 'block';
+                    article.style.animation = 'none';
+                });
+                return;
+            }
+
+            articles.forEach(article => {
+                const titleEl = article.querySelector('.article-title');
+                const summaryEl = article.querySelector('.article-summary');
+
+                if (!titleEl || !summaryEl) return;
+
+                const title = titleEl.textContent.toLowerCase();
+                const summary = summaryEl.textContent.toLowerCase();
+                const tags = Array.from(article.querySelectorAll('.tag')).map(tag => tag.textContent.toLowerCase());
+
+                const matches = title.includes(searchTerm) ||
+                    summary.includes(searchTerm) ||
+                    tags.some(tag => tag.includes(searchTerm));
+
+                if (matches) {
+                    // Explicitly set to block for matches
+                    article.style.display = 'block';
+                    article.style.animation = 'fadeIn 0.5s ease';
+                } else {
+                    // Force hide non-matches
+                    article.style.setProperty('display', 'none', 'important');
+                }
+            });
+        }
+
+        // Get the search input element once
         const searchInput = document.querySelector('.search-bar input');
-        
+
         // Search on Enter key
         searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                const searchTerm = searchInput.value.trim();
-                if (searchTerm) {
-                    console.log(`Searching for: ${searchTerm}`);
-                    // Here you would typically implement the search functionality
-                }
+                performSearch();
             }
+        });
+
+        // Live search (optional, but good for UX)
+        searchInput.addEventListener('input', () => {
+            performSearch();
         });
     </script>
 </body>
+
 </html>

@@ -5,7 +5,6 @@ from typing import Optional
 
 from sqlalchemy import (
     CheckConstraint,
-    Column,
     DateTime,
     Float,
     ForeignKey,
@@ -101,11 +100,17 @@ class BiasRating(Base):
         ForeignKey("articles.article_id"), nullable=False
     )
     bias_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    
+    # Multi-dimensional bias scores
+    partisan_bias: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    affective_bias: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    framing_bias: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    sourcing_bias: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    
     reasoning: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     evaluated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
-    rating_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
     article: Mapped["Article"] = relationship("Article", back_populates="bias_ratings")

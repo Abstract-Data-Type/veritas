@@ -51,6 +51,19 @@ async def get_latest_articles(
     limit: int = Query(
         default=20, ge=1, le=100, description="Number of articles to return"
     ),
+    offset: int = Query(default=0, ge=0, description="Number of articles to skip"),
+    start_date: Optional[datetime] = Query(
+        default=None, description="Filter articles published after this date"
+    ),
+    end_date: Optional[datetime] = Query(
+        default=None, description="Filter articles published before this date"
+    ),
+    min_bias_score: Optional[float] = Query(
+        default=None, ge=-1.0, le=1.0, description="Minimum bias score"
+    ),
+    max_bias_score: Optional[float] = Query(
+        default=None, ge=-1.0, le=1.0, description="Maximum bias score"
+    ),
     db: Session = Depends(get_session),
 ):
     """
@@ -61,17 +74,36 @@ async def get_latest_articles(
 
     Args:
         limit: Maximum number of articles to return (1-100, default 20)
+        offset: Number of articles to skip for pagination (default 0)
+        start_date: Filter articles published after this date (optional)
+        end_date: Filter articles published before this date (optional)
+        min_bias_score: Minimum bias score to include (optional, -1.0 to 1.0)
+        max_bias_score: Maximum bias score to include (optional, -1.0 to 1.0)
 
     Returns:
         List of articles with bias ratings and total count
     """
-    # Query articles with left join to bias_ratings
+    # Start building query with left join to bias_ratings
+    query = db.query(Article).outerjoin(
+        BiasRating, Article.article_id == BiasRating.article_id
+    )
+
+    # Apply date filters
+    if start_date:
+        query = query.filter(Article.published_at >= start_date)
+
+    if end_date:
+        query = query.filter(Article.published_at <= end_date)
+
+    if min_bias_score is not None:
+        query = query.filter(BiasRating.bias_score >= min_bias_score)
+
+    if max_bias_score is not None:
+        query = query.filter(BiasRating.bias_score <= max_bias_score)
+
+    # Get articles with pagination
     articles = (
-        db.query(Article)
-        .outerjoin(BiasRating, Article.article_id == BiasRating.article_id)
-        .order_by(Article.created_at.desc())
-        .limit(limit)
-        .all()
+        query.order_by(Article.created_at.desc()).offset(offset).limit(limit).all()
     )
 
     # Build response with bias rating info

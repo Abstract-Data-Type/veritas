@@ -65,3 +65,64 @@ def get_prompts_config() -> List[Dict[str, str]]:
     if _PROMPTS_CONFIG is None:
         _PROMPTS_CONFIG = load_prompts_config()
     return _PROMPTS_CONFIG
+
+
+def load_summarization_prompt_template() -> str:
+    """
+    Load the summarization prompt template from prompts.yaml.
+
+    Returns:
+        The prompt template string with {article_text} placeholder
+
+    Raises:
+        HTTPException: 500 if config file cannot be loaded or template missing
+    """
+    config_path = Path(__file__).parent / "prompts.yaml"
+
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+
+        if not config or "summarization" not in config:
+            raise HTTPException(
+                status_code=500,
+                detail="Invalid prompts.yaml: missing 'summarization' key",
+            )
+
+        summarization_config = config["summarization"]
+        if not isinstance(summarization_config, dict):
+            raise HTTPException(
+                status_code=500,
+                detail="Invalid prompts.yaml: 'summarization' must be a dictionary",
+            )
+
+        template = summarization_config.get("prompt_template")
+        if not template or not isinstance(template, str):
+            raise HTTPException(
+                status_code=500,
+                detail="Invalid prompts.yaml: 'summarization.prompt_template' must be a non-empty string",
+            )
+
+        return template
+
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=500, detail=f"Configuration file not found: {config_path}"
+        )
+    except yaml.YAMLError as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error parsing prompts.yaml: {str(e)}"
+        )
+
+
+# Cache the summarization prompt template at module level
+_SUMMARIZATION_PROMPT_TEMPLATE = None
+
+
+def get_summarization_prompt_template() -> str:
+    """Get cached summarization prompt template, loading it if necessary."""
+    global _SUMMARIZATION_PROMPT_TEMPLATE
+    if _SUMMARIZATION_PROMPT_TEMPLATE is None:
+        _SUMMARIZATION_PROMPT_TEMPLATE = load_summarization_prompt_template()
+    return _SUMMARIZATION_PROMPT_TEMPLATE
+

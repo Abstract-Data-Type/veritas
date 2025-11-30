@@ -9,6 +9,9 @@ from fastapi import HTTPException
 from google import genai
 from google.genai import types
 
+from .config import get_prompts_config
+from .scoring import score_bias
+
 
 def parse_llm_score(response_text: str) -> float:
     """
@@ -219,3 +222,52 @@ async def rate_bias_parallel(
         raise HTTPException(status_code=502, detail=f"Bias rating failed: {error_msg}")
 
     return scores
+
+
+async def rate_bias(article_text: str) -> Dict[str, any]:
+    """
+    Main function to rate bias for an article (converted from FastAPI endpoint).
+
+    Makes N parallel LLM calls (one per bias dimension) and returns compiled scores.
+    The function is atomic: if any dimension analysis fails, the entire request fails.
+
+    Args:
+        article_text: The full text of the article to analyze (required, non-empty)
+
+    Returns:
+        Dictionary with:
+        - scores: Dictionary mapping dimension names to scores (1.0-7.0)
+        - ai_model: The AI model used for analysis
+
+    Raises:
+        HTTPException: 500 if config/API key missing, 502 if LLM calls fail
+    """
+    model = "gemini-2.5-flash"
+
+    # Get prompts configuration (cached at module level)
+    try:
+        dimension_configs = get_prompts_config()
+    except HTTPException:
+        # Re-raise config errors as-is (already 500 status)
+        raise
+
+    # Validate API key is configured
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
+
+    # Execute parallel LLM calls for all dimensions
+    try:
+        raw_scores = await rate_bias_parallel(article_text, dimension_configs, model)
+    except HTTPException:
+        # Re-raise HTTP exceptions (e.g., 502 from rate_bias_parallel)
+        raise
+    except Exception as e:
+        # Catch any unexpected errors
+        raise HTTPException(status_code=502, detail=f"Bias rating failed: {str(e)}")
+
+    # Apply scoring function (currently pass-through)
+    final_scores = score_bias(raw_scores)
+
+    return {"scores": final_scores, "ai_model": model}
+

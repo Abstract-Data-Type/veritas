@@ -1,14 +1,14 @@
-import os
 from datetime import datetime
 from typing import Dict
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from ..ai import rate_bias, summarize_with_gemini
 from ..db.sqlalchemy import get_session
+from ..models.bias_rating import get_all_dimension_scores, get_overall_bias_score
 from ..models.sqlalchemy_models import Article, BiasRating
 
 router = APIRouter()
@@ -31,9 +31,14 @@ class AnalyzeArticleResponse(BaseModel):
 
     rating_id: int
     article_id: int
-    bias_score: float
+    bias_score: float | None
     reasoning: str
     scores: Dict[str, float]
+    # Multi-dimensional scores
+    partisan_bias: float | None = None
+    affective_bias: float | None = None
+    framing_bias: float | None = None
+    sourcing_bias: float | None = None
 
 
 @router.post("/analyze", response_model=AnalyzeArticleResponse)
@@ -41,10 +46,10 @@ async def analyze_article_bias(
     request: AnalyzeArticleRequest, db: Session = Depends(get_session)
 ):
     """
-    Analyze an article for political bias using the LLM service.
+    Analyze an article for political bias using the AI library.
 
     This endpoint is called by the worker after storing a new article.
-    It fetches the article text, calls the bias rating service, and stores the results.
+    It fetches the article text, calls the bias rating function, and stores the results.
 
     Args:
         request: Contains article_id to analyze
@@ -53,7 +58,7 @@ async def analyze_article_bias(
         The created bias rating with scores
 
     Raises:
-        HTTPException: If article not found or bias service fails
+        HTTPException: If article not found or bias analysis fails
     """
     # Fetch the article
     article = db.query(Article).filter(Article.article_id == request.article_id).first()
@@ -75,74 +80,79 @@ async def analyze_article_bias(
         logger.info(
             f"Bias rating already exists for article {request.article_id}, returning existing"
         )
+        dimension_scores = get_all_dimension_scores(existing_rating)
+        overall_score = get_overall_bias_score(existing_rating)
         return AnalyzeArticleResponse(
             rating_id=existing_rating.rating_id,
             article_id=existing_rating.article_id,
-            bias_score=existing_rating.bias_score or 0.0,
+            bias_score=overall_score,
             reasoning=existing_rating.reasoning or "",
-            scores={},
+            scores=dimension_scores,
+            partisan_bias=existing_rating.partisan_bias,
+            affective_bias=existing_rating.affective_bias,
+            framing_bias=existing_rating.framing_bias,
+            sourcing_bias=existing_rating.sourcing_bias,
         )
 
-    # Call the bias rating service
-    summarization_service_url = os.environ.get(
-        "SUMMARIZATION_SERVICE_URL", "http://localhost:8000"
-    ).rstrip("/")
-
+    # Call the bias rating function directly
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            logger.info(f"Calling bias service for article {request.article_id}")
-            response = await client.post(
-                f"{summarization_service_url}/rate-bias",
-                json={"article_text": article.raw_text},
-            )
+        logger.info(f"Calling bias analysis for article {request.article_id}")
+        bias_result = await rate_bias(article.raw_text)
 
-            if response.status_code != 200:
-                logger.error(
-                    f"Bias service error {response.status_code}: {response.text}"
-                )
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Bias rating service failed: {response.status_code}",
-                )
+        # Extract scores from result
+        scores = bias_result.get("scores", {})
+        
+        # Extract individual dimension scores
+        partisan_bias = scores.get("partisan_bias")
+        affective_bias = scores.get("affective_bias")
+        framing_bias = scores.get("framing_bias")
+        sourcing_bias = scores.get("sourcing_bias")
+        
+        # Calculate overall bias score as average of dimensions
+        valid_scores = [s for s in [partisan_bias, affective_bias, framing_bias, sourcing_bias] if s is not None]
+        overall_bias_score = sum(valid_scores) / len(valid_scores) if valid_scores else None
 
-            bias_data = response.json()
+        # Store the bias rating with all dimensions
+        new_rating = BiasRating(
+            article_id=request.article_id,
+            bias_score=overall_bias_score,
+            partisan_bias=partisan_bias,
+            affective_bias=affective_bias,
+            framing_bias=framing_bias,
+            sourcing_bias=sourcing_bias,
+            reasoning=None,  # Could add reasoning extraction later
+            evaluated_at=datetime.utcnow(),
+        )
 
-            # Extract whatever the bias service returns
-            bias_score = bias_data.get("bias_score")
-            reasoning = bias_data.get("reasoning", "")
-            scores = bias_data.get("scores", {})
+        db.add(new_rating)
+        db.flush()  # Flush to get rating_id without full commit
+        
+        # Get rating_id after flush (it's populated by autoincrement)
+        rating_id = new_rating.rating_id
+        
+        # Now commit the transaction
+        db.commit()
 
-            # Store the bias rating with whatever the service provided
-            new_rating = BiasRating(
-                article_id=request.article_id,
-                bias_score=bias_score,
-                reasoning=reasoning,
-                evaluated_at=datetime.utcnow(),
-            )
+        logger.info(
+            f"Stored bias rating {rating_id} for article {request.article_id} "
+            f"with scores: partisan={partisan_bias}, affective={affective_bias}, "
+            f"framing={framing_bias}, sourcing={sourcing_bias}"
+        )
 
-            db.add(new_rating)
-            db.commit()
-            db.refresh(new_rating)
+        return AnalyzeArticleResponse(
+            rating_id=rating_id,
+            article_id=request.article_id,  # Use request parameter instead of DB object
+            bias_score=overall_bias_score,
+            reasoning="",  # Not storing reasoning currently
+            scores=scores,
+            partisan_bias=partisan_bias,
+            affective_bias=affective_bias,
+            framing_bias=framing_bias,
+            sourcing_bias=sourcing_bias,
+        )
 
-            logger.info(
-                f"Stored bias rating {new_rating.rating_id} for article {request.article_id}"
-            )
-
-            return AnalyzeArticleResponse(
-                rating_id=new_rating.rating_id,
-                article_id=new_rating.article_id,
-                bias_score=new_rating.bias_score,
-                reasoning=new_rating.reasoning,
-                scores=scores,
-            )
-
-    except httpx.TimeoutException:
-        logger.error("Bias service timeout")
-        raise HTTPException(status_code=504, detail="Bias rating service timeout")
-    except httpx.RequestError as e:
-        logger.error(f"Bias service connection error: {e}")
-        raise HTTPException(status_code=502, detail="Cannot reach bias rating service")
     except HTTPException:
+        # Re-raise HTTP exceptions (e.g., 502 from rate_bias)
         raise
     except Exception as e:
         logger.error(f"Unexpected error analyzing bias: {e}")
@@ -154,10 +164,9 @@ async def analyze_article_bias(
 @router.post("/summarize")
 async def summarize_article(request: SummarizeRequest):
     """
-    Summarize article text using the summarization service.
+    Summarize article text using the AI library.
 
-    This endpoint validates the input and forwards the request to the
-    summarization service, handling errors appropriately.
+    This endpoint validates the input and calls the summarization function directly.
 
     Args:
         request: Contains article_text to summarize
@@ -166,7 +175,7 @@ async def summarize_article(request: SummarizeRequest):
         Dictionary with 'summary' key containing the summarized text
 
     Raises:
-        HTTPException: 422 for invalid input, 502 for service errors
+        HTTPException: 422 for invalid input, 500/502 for errors
     """
     # Validate article text
     if not request.article_text or not request.article_text.strip():
@@ -174,77 +183,20 @@ async def summarize_article(request: SummarizeRequest):
             status_code=422, detail="Article text is required and cannot be empty"
         )
 
-    # Get summarization service URL
-    summarization_service_url = os.environ.get(
-        "SUMMARIZATION_SERVICE_URL", "http://localhost:8000"
-    ).rstrip("/")
-
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            logger.info("Calling summarization service")
-            response = await client.post(
-                f"{summarization_service_url}/summarize",
-                json={"article_text": request.article_text},
-            )
+        logger.info("Calling summarization function")
+        summary = summarize_with_gemini(request.article_text)
 
-            # Handle 4xx client errors from summarization service
-            if 400 <= response.status_code < 500:
-                logger.error(
-                    f"Summarization service client error {response.status_code}: {response.text}"
-                )
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"Invalid request to summarization service: {response.text}",
-                )
-
-            # Handle 5xx server errors from summarization service
-            if response.status_code >= 500:
-                logger.error(
-                    f"Summarization service server error {response.status_code}: {response.text}"
-                )
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Summarization service error: {response.status_code}",
-                )
-
-            # Handle successful response
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                except Exception as e:
-                    logger.error(f"Failed to parse JSON response: {e}")
-                    raise HTTPException(
-                        status_code=502,
-                        detail="Summarization service returned invalid JSON",
-                    )
-
-                # Check if summary field exists and is not empty
-                summary = data.get("summary", "")
-                if not summary or not summary.strip():
-                    logger.error("Summarization service returned empty summary")
-                    raise HTTPException(
-                        status_code=502,
-                        detail="Summarization service returned empty summary",
-                    )
-
-                return {"summary": summary}
-
-            # Unexpected status code
-            logger.error(f"Unexpected status code {response.status_code}")
+        if not summary or not summary.strip():
+            logger.error("Summarization function returned empty summary")
             raise HTTPException(
-                status_code=502,
-                detail=f"Unexpected response from summarization service: {response.status_code}",
+                status_code=502, detail="Summarization returned empty summary"
             )
 
-    except httpx.TimeoutException:
-        logger.error("Summarization service timeout")
-        raise HTTPException(status_code=504, detail="Summarization service timeout")
-    except httpx.RequestError as e:
-        logger.error(f"Summarization service connection error: {e}")
-        raise HTTPException(
-            status_code=502, detail="Cannot reach summarization service"
-        )
+        return {"summary": summary}
+
     except HTTPException:
+        # Re-raise HTTP exceptions (e.g., 500/502 from summarize_with_gemini)
         raise
     except Exception as e:
         logger.error(f"Unexpected error during summarization: {e}")

@@ -1,5 +1,9 @@
 """
-End-to-End Test for /rate-bias Endpoint
+End-to-End Test for /rate-bias Endpoint (DEPRECATED)
+
+⚠️  DEPRECATED: This tests the standalone FastAPI summarization service.
+    The main backend now uses the AI library directly (src/ai/).
+    Use tests/test_e2e_backend.py instead for end-to-end testing.
 
 This test starts the actual FastAPI server and makes real HTTP requests to it.
 This is the closest thing to testing how a real backend client would interact with the service.

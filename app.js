@@ -29,9 +29,9 @@ if (themeToggle) {
         setTheme(currentTheme === 'dark' ? 'light' : 'dark');
     });
 }
-document.addEventListener('DOMContentLoaded', function() {
-    // Sample data - in a real app, this would come from your backend
-    const articles = [
+document.addEventListener('DOMContentLoaded', async function() {
+    // Fallback sample data for when backend is unavailable
+    const sampleArticles = [
         {
             id: 1,
             title: "Climate Change Agreement Reached at Global Summit",
@@ -128,6 +128,76 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     ];
+
+    // Fetch articles from backend API
+    async function fetchArticlesFromAPI() {
+        try {
+            console.log('Fetching articles from backend API...');
+            const response = await fetch('http://localhost:8001/articles/latest');
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('API response:', data);
+            
+            // Transform API data to match frontend expectations
+            const transformedArticles = data.articles.map(article => {
+                // Generate random bias score if no bias rating exists
+                const biasScore = article.bias_rating?.bias_score || (Math.random() * 2 - 1); // -1 to 1
+                
+                return {
+                    id: article.article_id,
+                    title: article.title,
+                    summary: article.raw_text || 'No summary available',
+                    source: article.source || 'Unknown Source',
+                    sourceLogo: "https://via.placeholder.com/20",
+                    image: `https://source.unsplash.com/random/600x400/?news`, // Placeholder image
+                    date: formatDate(article.published_at),
+                    bias: getBiasLabel(biasScore),
+                    biasScore: biasScore,
+                    saved: false,
+                    url: article.url,
+                    politicalSpectrum: {
+                        economic: biasScore * 0.8, // Convert bias to economic position
+                        social: Math.random() * 0.8 - 0.4 // Random social position
+                    }
+                };
+            });
+            
+            console.log('Transformed articles:', transformedArticles);
+            return transformedArticles;
+            
+        } catch (error) {
+            console.error('Error fetching articles from API:', error);
+            console.log('Falling back to sample data');
+            return sampleArticles;
+        }
+    }
+
+    // Helper function to format date
+    function formatDate(dateString) {
+        if (!dateString) return 'Unknown date';
+        
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffDays = Math.floor(diffHours / 24);
+        
+        if (diffHours < 1) return 'Less than an hour ago';
+        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+        if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+        return date.toLocaleDateString();
+    }
+
+    // Helper function to get bias label
+    function getBiasLabel(score) {
+        if (score < -0.4) return 'left';
+        if (score > 0.4) return 'right';
+        return 'center';
+    }
 
     const newsFeed = document.getElementById('newsFeed');
     const filterButtons = document.querySelectorAll('.filter-btn');
@@ -270,18 +340,31 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         const filtered = articles.filter(article => {
-            // In a real app, you would filter by actual topic
-            // This is just a simple example
+            // Simple keyword-based filtering for topics
+            const title = article.title.toLowerCase();
+            const summary = article.summary.toLowerCase();
+            const source = article.source.toLowerCase();
+            
             if (topic === 'Politics') {
-                return article.id === 1 || article.id === 5 || article.id === 6;
+                return title.includes('politic') || title.includes('government') || 
+                       title.includes('election') || title.includes('congress') ||
+                       summary.includes('politic') || source.includes('politic');
             } else if (topic === 'Technology') {
-                return article.id === 3;
+                return title.includes('tech') || title.includes('ai') || 
+                       title.includes('digital') || title.includes('innovation') ||
+                       summary.includes('tech') || source.toLowerCase().includes('tech');
             } else if (topic === 'Health') {
-                return article.id === 5;
+                return title.includes('health') || title.includes('medical') || 
+                       title.includes('hospital') || title.includes('doctor') ||
+                       summary.includes('health') || summary.includes('medical');
             } else if (topic === 'Business') {
-                return article.id === 4;
+                return title.includes('business') || title.includes('market') || 
+                       title.includes('stock') || title.includes('economy') ||
+                       summary.includes('business') || summary.includes('market');
             } else if (topic === 'Science') {
-                return article.id === 2;
+                return title.includes('science') || title.includes('research') || 
+                       title.includes('study') || title.includes('discovery') ||
+                       summary.includes('science') || summary.includes('research');
             }
             return true;
         });
@@ -301,7 +384,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Initial render
+    // Load articles from API and render
+    let articles = await fetchArticlesFromAPI();
     renderArticles(articles);
 
     // Search functionality

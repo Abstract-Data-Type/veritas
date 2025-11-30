@@ -1,0 +1,132 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "veritas-news"
+version = "0.1.0"
+description = "AI-powered news aggregation and political bias analysis platform"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+keywords = ["news", "bias-analysis", "ai", "fastapi", "nlp"]
+dependencies = [
+    # Web Framework & Server
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0",
+    # Database
+    "sqlalchemy>=2.0.36",
+    "aiosqlite>=0.19.0",
+    # HTTP Clients
+    "httpx>=0.25.2",
+    "requests>=2.31.0",
+    # Environment & Config
+    "python-dotenv>=1.0.0",
+    # Web Scraping
+    "beautifulsoup4>=4.12.2",
+    # NLP & AI
+    "nltk>=3.8.1",
+    "textblob>=0.17.1",
+    "google-genai>=0.3.0",
+    # Date/Time
+    "python-dateutil>=2.8.2",
+    # Logging
+    "loguru>=0.7.2",
+    # Security
+    "passlib[bcrypt]>=1.7.4",
+    "python-jose[cryptography]>=3.3.0",
+    # RSS & News
+    "feedparser>=6.0.11",
+    "newsapi-python>=0.2.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.21.1",
+    "black>=23.11.0",
+    "ruff>=0.1.6",
+    "isort>=5.12.0",
+    "mypy>=1.7.0",
+]
+
+[project.scripts]
+veritas-news = "veritas_news.main:run"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.21.1",
+    "black>=23.11.0",
+    "ruff>=0.1.6",
+    "isort>=5.12.0",
+    "mypy>=1.7.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/veritas_news"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/veritas_news", "README.md", "pyproject.toml"]
+
+[tool.ruff]
+target-version = "py311"
+fix = true
+line-length = 88
+indent-width = 4
+
+[tool.ruff.format]
+indent-style = "space"
+
+[tool.ruff.lint]
+select = [
+    "E",  # Error
+    "W",  # Warning
+    "F",  # Pyflakes
+    "I",  # isort
+    "N",  # pep8-naming
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501", # line-too-long
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["veritas_news"]
+combine-as-imports = true
+force-sort-within-sections = true
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/**/*" = ["S101"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+markers = [
+    "e2e: end-to-end tests that require external services (GEMINI_API_KEY, etc.)",
+]
+addopts = ["-m", "not e2e", "-ra", "--showlocals", "-v"]
+
+[tool.mypy]
+python_version = "3.11"
+mypy_path = "src"
+warn_return_any = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_no_return = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+strict_equality = true
+ignore_missing_imports = true
+exclude = '(build|dist|\.venv|venv|\.git|__pycache__)'
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 88

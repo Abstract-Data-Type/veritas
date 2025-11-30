@@ -1,51 +1,50 @@
 // app.js
 
-// Add this to app.js, before the DOMContentLoaded event listener
+// ---------- THEME HELPERS (optional) ----------
 function setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
 }
 
-// Initialize theme from localStorage or prefer-color-scheme
 function initTheme() {
     const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
+    const prefersDark = window.matchMedia &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches;
+
     if (savedTheme) {
         setTheme(savedTheme);
     } else if (prefersDark) {
         setTheme('dark');
+    } else {
+        setTheme('light');
     }
 }
 
-// Add this inside the DOMContentLoaded event listener, at the beginning
-initTheme();
+// ---------- APP ----------
+document.addEventListener('DOMContentLoaded', async function () {
+    // Init theme
+    initTheme();
 
-// Add theme toggle functionality
-const themeToggle = document.getElementById('themeToggle');
-if (themeToggle) {
-    themeToggle.addEventListener('click', () => {
-        const currentTheme = document.documentElement.getAttribute('data-theme');
-        setTheme(currentTheme === 'dark' ? 'light' : 'dark');
-    });
-}
-document.addEventListener('DOMContentLoaded', async function() {
-    // Fallback sample data for when backend is unavailable
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            setTheme(currentTheme === 'dark' ? 'light' : 'dark');
+        });
+    }
+
+    // ---------- SAMPLE DATA ----------
     const sampleArticles = [
         {
             id: 1,
             title: "Climate Change Agreement Reached at Global Summit",
             summary: "World leaders have agreed on new climate targets that aim to reduce carbon emissions by 50% by 2030. The agreement includes provisions for developed nations to assist developing countries in their transition to renewable energy sources.",
+            source: "Global Times",
             sourceLogo: "https://via.placeholder.com/20",
             image: "https://source.unsplash.com/random/600x400/?climate",
             date: "2 hours ago",
             bias: "left",
-            biasScore: -0.7,
-            saved: false,
-            politicalSpectrum: {
-                economic: -0.6,  // Left-leaning on economics
-                social: 0.4      // Slightly authoritarian
-            }
+            biasScore: -0.7
         },
         {
             id: 2,
@@ -56,12 +55,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             image: "https://source.unsplash.com/random/600x400/?science",
             date: "5 hours ago",
             bias: "right",
-            biasScore: 0.6,
-            saved: false,
-            politicalSpectrum: {
-                economic: 0.7,   // Right-leaning on economics
-                social: 0.5      // Somewhat authoritarian
-            }
+            biasScore: 0.6
         },
         {
             id: 3,
@@ -72,12 +66,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             image: "https://source.unsplash.com/random/600x400/?ai",
             date: "1 day ago",
             bias: "center",
-            biasScore: 0.1,
-            saved: true,
-            politicalSpectrum: {
-                economic: 0.2,   // Slightly right on economics
-                social: -0.3     // Somewhat libertarian
-            }
+            biasScore: 0.1
         },
         {
             id: 4,
@@ -88,12 +77,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             image: "https://source.unsplash.com/random/600x400/?stock-market",
             date: "3 hours ago",
             bias: "center",
-            biasScore: 0.2,
-            saved: false,
-            politicalSpectrum: {
-                economic: 0.8,   // Strongly right on economics
-                social: 0.1      // Neutral on social issues
-            }
+            biasScore: 0.2
         },
         {
             id: 5,
@@ -104,12 +88,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             image: "https://source.unsplash.com/random/600x400/?healthcare",
             date: "7 hours ago",
             bias: "center",
-            biasScore: 0,
-            saved: false,
-            politicalSpectrum: {
-                economic: -0.3,  // Slightly left on economics
-                social: -0.1     // Slightly libertarian
-            }
+            biasScore: 0
         },
         {
             id: 6,
@@ -120,55 +99,72 @@ document.addEventListener('DOMContentLoaded', async function() {
             image: "https://source.unsplash.com/random/600x400/?renewable-energy",
             date: "1 day ago",
             bias: "left",
-            biasScore: -0.5,
-            saved: true,
-            politicalSpectrum: {
-                economic: -0.7,  // Strongly left on economics
-                social: -0.6     // Strongly libertarian
-            }
+            biasScore: -0.5
         }
     ];
 
-    // Fetch articles from backend API
+    // ---------- HELPERS ----------
+    function formatDate(dateString) {
+        if (!dateString) return 'Unknown date';
+
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) {
+            // Already something like "2 hours ago" etc
+            return dateString;
+        }
+
+        const now = new Date();
+        const diffMs = now - date;
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffDays = Math.floor(diffHours / 24);
+
+        if (diffHours < 1) return 'Less than an hour ago';
+        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+        if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+        return date.toLocaleDateString();
+    }
+
+    function getBiasLabel(score) {
+        if (score < -0.4) return 'left';
+        if (score > 0.4) return 'right';
+        return 'center';
+    }
+
+    // Fetch from backend, fall back to sample data
     async function fetchArticlesFromAPI() {
         try {
             console.log('Fetching articles from backend API...');
             const response = await fetch('http://localhost:8001/articles/latest');
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            
+
             const data = await response.json();
             console.log('API response:', data);
-            
-            // Transform API data to match frontend expectations
-            const transformedArticles = data.articles.map(article => {
-                // Generate random bias score if no bias rating exists
-                const biasScore = article.bias_rating?.bias_score || (Math.random() * 2 - 1); // -1 to 1
-                
+
+            const transformedArticles = (data.articles || []).map(article => {
+                const biasScore =
+                    (article.bias_rating && typeof article.bias_rating.bias_score === 'number')
+                        ? article.bias_rating.bias_score
+                        : (Math.random() * 2 - 1);
+
                 return {
                     id: article.article_id,
                     title: article.title,
                     summary: article.raw_text || 'No summary available',
                     source: article.source || 'Unknown Source',
                     sourceLogo: "https://via.placeholder.com/20",
-                    image: `https://source.unsplash.com/random/600x400/?news`, // Placeholder image
+                    image: `https://source.unsplash.com/random/600x400/?news`,
                     date: formatDate(article.published_at),
                     bias: getBiasLabel(biasScore),
                     biasScore: biasScore,
-                    saved: false,
-                    url: article.url,
-                    politicalSpectrum: {
-                        economic: biasScore * 0.8, // Convert bias to economic position
-                        social: Math.random() * 0.8 - 0.4 // Random social position
-                    }
+                    url: article.url
                 };
             });
-            
+
             console.log('Transformed articles:', transformedArticles);
             return transformedArticles;
-            
         } catch (error) {
             console.error('Error fetching articles from API:', error);
             console.log('Falling back to sample data');
@@ -176,241 +172,166 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // Helper function to format date
-    function formatDate(dateString) {
-        if (!dateString) return 'Unknown date';
-        
-        const date = new Date(dateString);
-        const now = new Date();
-        const diffMs = now - date;
-        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-        const diffDays = Math.floor(diffHours / 24);
-        
-        if (diffHours < 1) return 'Less than an hour ago';
-        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-        if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-        return date.toLocaleDateString();
-    }
-
-    // Helper function to get bias label
-    function getBiasLabel(score) {
-        if (score < -0.4) return 'left';
-        if (score > 0.4) return 'right';
-        return 'center';
-    }
-
+    // ---------- DOM ELEMENTS ----------
     const newsFeed = document.getElementById('newsFeed');
-    const filterButtons = document.querySelectorAll('.filter-btn');
+    const categoryButtons = document.querySelectorAll('.category-btn');
+    const searchInput = document.querySelector('.search-bar input');
 
-    // Render articles
+    // ---------- RENDER ----------
     function renderArticles(articlesToRender) {
+        if (!newsFeed) return;
+
         newsFeed.innerHTML = '';
-        
-        // Load the political spectrum script if not already loaded
-        if (!window.PoliticalSpectrum) {
-            const script = document.createElement('script');
-            script.src = 'spectrum-graph.js';
-            document.head.appendChild(script);
-        }
-        
+
         articlesToRender.forEach(article => {
-            const biasClass = getBiasClass(article.biasScore);
-            const biasText = getBiasText(article.biasScore);
-            
-            // Generate a unique ID for the spectrum container
-            const spectrumId = `spectrum-${article.id}`;
-            
             const articleElement = document.createElement('article');
-            articleElement.className = `article-card`;
+            articleElement.className = 'article-card';
             articleElement.innerHTML = `
-                <img src="${article.image}" alt="${article.title}" class="article-image">
+                <div class="article-tags">
+                    <span class="tag">${(article.bias || '').toUpperCase()}</span>
+                    <span class="tag">${article.source || ''}</span>
+                </div>
                 <div class="article-content">
-                    <div class="article-source">
-                        <img src="${article.sourceLogo}" alt="${article.source}" class="source-logo">
-                        ${article.source}
-                    </div>
-                    <span class="article-bias ${biasClass}">${biasText}</span>
                     <h3 class="article-title">${article.title}</h3>
+                    <div class="article-meta">${article.date}</div>
                     <p class="article-summary">${article.summary}</p>
-                    
-                    <!-- Political Spectrum Graph -->
-                    <div class="spectrum-section">
-                        <h4>Political Spectrum Analysis</h4>
-                        <div id="${spectrumId}" class="spectrum-container"></div>
-                        <p class="spectrum-note">This analysis is based on the article's content and language patterns.</p>
-                    </div>
-                    
-                    <div class="article-meta">
-                        <span>${article.date}</span>
-                        <div class="article-actions">
-                            <button class="action-btn save-btn" data-id="${article.id}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-                                </svg>
-                                ${article.saved ? 'Saved' : 'Save'}
-                            </button>
-                            <button class="action-btn">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <circle cx="12" cy="12" r="1"></circle>
-                                    <circle cx="12" cy="5" r="1"></circle>
-                                    <circle cx="12" cy="19" r="1"></circle>
-                                </svg>
-                                More
-                            </button>
-                        </div>
-                    </div>
+                    <a href="${article.url || '#'}" class="read-more" target="_blank" rel="noopener noreferrer">
+                        Read Full Article <i class="fas fa-chevron-right"></i>
+                    </a>
                 </div>
             `;
-            
             newsFeed.appendChild(articleElement);
-            
-            // Initialize political spectrum graph for this article
-            if (window.PoliticalSpectrum && article.politicalSpectrum) {
-                const spectrumId = `spectrum-${article.id}`;
-                const container = document.getElementById(spectrumId);
-                if (container) {
-                    // Small delay to ensure the DOM is ready
-                    setTimeout(() => {
-                        try {
-                            const spectrum = new PoliticalSpectrum(container, {
-                                economicPosition: article.politicalSpectrum.economic,
-                                socialPosition: article.politicalSpectrum.social,
-                                showLabels: true,
-                                interactive: true
-                            });
-                        } catch (e) {
-                            console.error('Error initializing political spectrum:', e);
-                        }
-                    }, 100);
-                }
-            }
-        });
-
-        // Add event listeners to save buttons
-        document.querySelectorAll('.save-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const articleId = parseInt(this.getAttribute('data-id'));
-                const article = articles.find(a => a.id === articleId);
-                if (article) {
-                    article.saved = !article.saved;
-                    this.innerHTML = `
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-                        </svg>
-                        ${article.saved ? 'Saved' : 'Save'}
-                    `;
-                }
-            });
-        });
-
-        // Add click event to article cards to navigate to article detail
-        document.querySelectorAll('.article-card').forEach((card, index) => {
-            card.addEventListener('click', (e) => {
-                // Don't navigate if the click was on a button
-                if (!e.target.closest('button')) {
-                    const articleId = articlesToRender[index].id;
-                    // Navigate to article detail page
-                    window.location.href = `article-detail.html?id=${articleId}`;
-                }
-            });
         });
     }
 
-    // Get bias class based on score (-1 to 1)
-    function getBiasClass(score) {
-        if (score < -0.4) return 'bias-left';
-        if (score > 0.4) return 'bias-right';
-        return 'bias-center';
-    }
-
-    // Get bias text based on score
-    function getBiasText(score) {
-        if (score < -0.6) return 'Strong Left';
-        if (score < -0.2) return 'Lean Left';
-        if (score > 0.6) return 'Strong Right';
-        if (score > 0.2) return 'Lean Right';
-        return 'Center';
-    }
-
-    // Filter articles by topic
-    function filterArticles(topic) {
+    function filterArticlesByTopic(topic, allArticles) {
         if (topic === 'All') {
-            renderArticles(articles);
+            renderArticles(allArticles);
             return;
         }
-        
-        const filtered = articles.filter(article => {
-            // Simple keyword-based filtering for topics
+
+        const filtered = allArticles.filter(article => {
             const title = article.title.toLowerCase();
             const summary = article.summary.toLowerCase();
-            const source = article.source.toLowerCase();
-            
-            if (topic === 'Politics') {
-                return title.includes('politic') || title.includes('government') || 
-                       title.includes('election') || title.includes('congress') ||
-                       summary.includes('politic') || source.includes('politic');
-            } else if (topic === 'Technology') {
-                return title.includes('tech') || title.includes('ai') || 
-                       title.includes('digital') || title.includes('innovation') ||
-                       summary.includes('tech') || source.toLowerCase().includes('tech');
-            } else if (topic === 'Health') {
-                return title.includes('health') || title.includes('medical') || 
-                       title.includes('hospital') || title.includes('doctor') ||
-                       summary.includes('health') || summary.includes('medical');
-            } else if (topic === 'Business') {
-                return title.includes('business') || title.includes('market') || 
-                       title.includes('stock') || title.includes('economy') ||
-                       summary.includes('business') || summary.includes('market');
-            } else if (topic === 'Science') {
-                return title.includes('science') || title.includes('research') || 
-                       title.includes('study') || title.includes('discovery') ||
-                       summary.includes('science') || summary.includes('research');
+            const source = (article.source || '').toLowerCase();
+
+            switch (topic) {
+                case 'Politics':
+                    return title.includes('politic') || title.includes('government') ||
+                        title.includes('election') || summary.includes('politic') ||
+                        source.includes('politic');
+                case 'Business':
+                    return title.includes('business') || title.includes('market') ||
+                        title.includes('stock') || summary.includes('business') ||
+                        summary.includes('market');
+                case 'Technology':
+                    return title.includes('tech') || title.includes('ai') ||
+                        title.includes('digital') || title.includes('innovation') ||
+                        summary.includes('tech') || source.includes('tech');
+                case 'Science':
+                    return title.includes('science') || title.includes('research') ||
+                        title.includes('study') || title.includes('discovery') ||
+                        summary.includes('science') || summary.includes('research');
+                case 'Health':
+                    return title.includes('health') || title.includes('medical') ||
+                        title.includes('hospital') || summary.includes('health') ||
+                        summary.includes('medical');
+                default:
+                    return true;
             }
-            return true;
         });
-        
+
         renderArticles(filtered);
     }
 
-    // Add event listeners to filter buttons
-    filterButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            // Remove active class from all buttons
-            filterButtons.forEach(btn => btn.classList.remove('active'));
-            // Add active class to clicked button
-            this.classList.add('active');
-            // Filter articles
-            filterArticles(this.textContent);
+    // ---------- DATA & INITIAL RENDER ----------
+    let articles = [];
+
+    // Show loading state
+    if (newsFeed) {
+        newsFeed.innerHTML = '<div class="loading-indicator">Loading articles...</div>';
+    }
+
+    try {
+        const fetchedArticles = await fetchArticlesFromAPI();
+        // If API returns empty list, fall back to sample data (for demo purposes)
+        if (fetchedArticles && fetchedArticles.length > 0) {
+            articles = fetchedArticles;
+        } else {
+            console.log('API returned empty list, using sample data');
+            articles = sampleArticles;
+        }
+    } catch (e) {
+        console.error('Fatal error fetching articles:', e);
+        articles = sampleArticles;
+    }
+
+    renderArticles(articles);
+
+    // ---------- CATEGORY FILTER EVENTS ----------
+    categoryButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            categoryButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+
+            const topic = button.dataset.topic || 'All';
+            filterArticlesByTopic(topic, articles);
         });
     });
 
-    // Load articles from API and render
-    let articles = await fetchArticlesFromAPI();
-    renderArticles(articles);
-
-    // Search functionality
-    const searchInput = document.querySelector('.search-bar input');
-    const searchButton = document.querySelector('.search-bar button');
-
+    // ---------- SEARCH ----------
     function handleSearch() {
-        const searchTerm = searchInput.value.toLowerCase();
-        if (searchTerm.trim() === '') {
+        if (!articles || articles.length === 0) return;
+
+        const term = (searchInput?.value || '').toLowerCase().trim();
+        console.log('Search term:', term);
+        console.log('Total articles available:', articles.length);
+
+        // Empty search → show everything again
+        if (!term) {
+            console.log('Clearing search, showing all articles');
             renderArticles(articles);
             return;
         }
 
-        const filtered = articles.filter(article => 
-            article.title.toLowerCase().includes(searchTerm) || 
-            article.summary.toLowerCase().includes(searchTerm)
-        );
-        
+        const filtered = articles.filter(article => {
+            const text = `${article.title} ${article.summary} ${article.source || ''}`.toLowerCase();
+            return text.includes(term);
+        });
+
+        if (filtered.length === 0) {
+            newsFeed.innerHTML = `
+                <div class="no-results">
+                    <p>No articles found matching "${term}"</p>
+                    <button class="clear-search-btn">Clear Search</button>
+                </div>
+            `;
+            // Add listener to the clear button
+            document.querySelector('.clear-search-btn')?.addEventListener('click', () => {
+                searchInput.value = '';
+                renderArticles(articles);
+                searchInput.focus();
+            });
+            return;
+        }
+
+        console.log('Filtered count:', filtered.length);
         renderArticles(filtered);
     }
 
-    searchButton.addEventListener('click', handleSearch);
-    searchInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            handleSearch();
-        }
-    });
+    if (searchInput) {
+        // Live search as you type
+        searchInput.addEventListener('input', handleSearch);
+
+        // Handle 'x' button clear in some browsers
+        searchInput.addEventListener('search', handleSearch);
+
+        // Also search on Enter
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSearch();
+            }
+        });
+    }
 });

@@ -1,10 +1,26 @@
 import Link from "next/link";
 import { Article, getPoliticalLeaning, getLeaningLabel } from "@/lib/api/types";
-import { formatDate, formatBiasScore } from "@/lib/api/client";
+import { formatDate, formatBiasScore, formatIdeologicalScore, formatEvidenceScore } from "@/lib/api/client";
 import { getLeaningTheme, articleCard, badge, skeleton, cn } from "@/lib/theme";
 
 interface ArticleCardProps {
   article: Article;
+}
+
+// Get color class for ideological score (blue=left, gray=center, red=right)
+function getIdeologicalColorClass(score: number | null | undefined): string {
+  if (score === null || score === undefined) return "text-gray-600";
+  if (score < -0.15) return "text-blue-600";
+  if (score > 0.15) return "text-red-600";
+  return "text-gray-600";
+}
+
+// Get color class for evidence score (red=poor, yellow=mixed, green=good)
+function getEvidenceColorClass(score: number | null | undefined): string {
+  if (score === null || score === undefined) return "text-gray-600";
+  if (score < -0.15) return "text-red-500";
+  if (score < 0.15) return "text-yellow-600";
+  return "text-emerald-600";
 }
 
 export function ArticleCard({ article }: ArticleCardProps) {
@@ -17,9 +33,11 @@ export function ArticleCard({ article }: ArticleCardProps) {
         {/* Title and Badge */}
         <div className={articleCard.titleRow}>
           <h3 className={articleCard.title}>{article.title}</h3>
+          {/* OLD: Legacy bias badge - commented out in favor of SECM scores
           <span className={cn(badge.base, theme.badge)}>
             {getLeaningLabel(leaning)}
           </span>
+          */}
         </div>
 
         {/* Meta Info */}
@@ -36,9 +54,10 @@ export function ArticleCard({ article }: ArticleCardProps) {
           </span>
         </div>
 
-        {/* Bias Score */}
+        {/* SECM Scores Section */}
         {article.bias_rating && (
           <div className={articleCard.biasSection}>
+            {/* OLD: Legacy 4-dimension bias score - commented out in favor of SECM
             <div className="flex items-center justify-between mb-1">
               <span className={articleCard.biasLabel}>Bias Score</span>
               <span className={articleCard.biasScore}>
@@ -57,6 +76,63 @@ export function ArticleCard({ article }: ArticleCardProps) {
                 }}
               />
             </div>
+            */}
+
+            {/* New Ideological Score (Beta) */}
+            {article.bias_rating.secm_ideological_score !== null && 
+             article.bias_rating.secm_ideological_score !== undefined && (
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className={cn(articleCard.biasLabel, "flex items-center gap-1")}>
+                    Ideological Score
+                    <span className="text-[10px] font-medium px-1 py-0.5 bg-amber-100 text-amber-700 rounded">
+                      BETA
+                    </span>
+                  </span>
+                  <span className={cn("font-semibold", getIdeologicalColorClass(article.bias_rating.secm_ideological_score))}>
+                    {formatIdeologicalScore(article.bias_rating.secm_ideological_score)}
+                  </span>
+                </div>
+                {/* Fixed gradient with position indicator */}
+                <div className="relative h-2 rounded-full bg-gradient-to-r from-blue-500 via-gray-300 to-red-500">
+                  <div
+                    className="absolute top-1/2 h-3 w-1 -translate-y-1/2 rounded-full bg-white shadow ring-1 ring-gray-400"
+                    style={{
+                      left: `${((article.bias_rating.secm_ideological_score ?? 0) + 1) * 50}%`,
+                      transform: "translate(-50%, -50%)",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Evidence Rating (Epistemic Score - Beta) */}
+            {article.bias_rating.secm_epistemic_score !== null && 
+             article.bias_rating.secm_epistemic_score !== undefined && (
+              <div className="mt-3 pt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className={cn(articleCard.biasLabel, "flex items-center gap-1")}>
+                    Evidence Rating
+                    <span className="text-[10px] font-medium px-1 py-0.5 bg-emerald-100 text-emerald-700 rounded">
+                      BETA
+                    </span>
+                  </span>
+                  <span className={cn("font-semibold", getEvidenceColorClass(article.bias_rating.secm_epistemic_score))}>
+                    {formatEvidenceScore(article.bias_rating.secm_epistemic_score)}
+                  </span>
+                </div>
+                {/* Fixed gradient with position indicator */}
+                <div className="relative h-2 rounded-full bg-gradient-to-r from-red-400 via-yellow-400 to-emerald-500">
+                  <div
+                    className="absolute top-1/2 h-3 w-1 -translate-y-1/2 rounded-full bg-white shadow ring-1 ring-gray-400"
+                    style={{
+                      left: `${((article.bias_rating.secm_epistemic_score ?? 0) + 1) * 50}%`,
+                      transform: "translate(-50%, -50%)",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </article>

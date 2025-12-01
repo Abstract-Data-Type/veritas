@@ -17,6 +17,9 @@ class BiasRatingInfo(BaseModel):
     bias_score: float | None
     reasoning: str | None
     evaluated_at: datetime
+    # SECM scores (new ideological scoring system)
+    secm_ideological_score: float | None = None
+    secm_epistemic_score: float | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -115,6 +118,8 @@ async def get_latest_articles(
                 bias_score=rating.bias_score,
                 reasoning=rating.reasoning,
                 evaluated_at=rating.evaluated_at,
+                secm_ideological_score=rating.secm_ideological_score,
+                secm_epistemic_score=rating.secm_epistemic_score,
             )
 
         article_responses.append(

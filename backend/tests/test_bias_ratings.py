@@ -167,9 +167,22 @@ class TestAnalyzeEndpoint:
         mock_client = MagicMock()
         mock_client_class.return_value = mock_client
 
-        mock_result = MagicMock()
-        mock_result.text = "5"  # LLM returns score as text
-        mock_client.models.generate_content.return_value = mock_result
+        # Track call count to return different responses for different analysis types
+        call_count = [0]  # Using list to allow mutation in nested function
+
+        def mock_generate_content(*args, **kwargs):
+            call_count[0] += 1
+            mock_result = MagicMock()
+            # First 4 calls are for legacy 4-dimension analysis (1-7 scale)
+            # Remaining 22 calls are for SECM (binary with XML tags)
+            if call_count[0] <= 4:
+                mock_result.text = "5"  # Legacy system expects 1-7 score
+            else:
+                # SECM expects binary answer with reasoning
+                mock_result.text = "<reasoning>Test reasoning</reasoning><answer>1</answer>"
+            return mock_result
+
+        mock_client.models.generate_content.side_effect = mock_generate_content
 
         # Set API key
         original_key = os.environ.get("GEMINI_API_KEY")
@@ -203,8 +216,16 @@ class TestAnalyzeEndpoint:
             # Overall bias score is normalized from 1-7 scale to -1 to 1 scale
             # Average of all dimensions is 5.0, normalized: (5.0-4)/3 = 0.333
             assert abs(data["bias_score"] - 0.333) < 0.01
-            # Verify Gemini was called (for each dimension - 4 times)
-            assert mock_client.models.generate_content.call_count == 4
+            # Verify SECM scores are present
+            assert "secm_ideological_score" in data
+            assert "secm_epistemic_score" in data
+            # With all variables = 1: L=6, R=6, H=5, E=5
+            # ideological = (6-6)/(6+6+0.1) = 0.0
+            # epistemic = (5-5)/(5+5+0.1) = 0.0
+            assert abs(data["secm_ideological_score"] - 0.0) < 0.01
+            assert abs(data["secm_epistemic_score"] - 0.0) < 0.01
+            # Verify Gemini was called (4 legacy + 22 SECM = 26 times)
+            assert mock_client.models.generate_content.call_count == 26
         finally:
             app.dependency_overrides.clear()
             # Restore original key

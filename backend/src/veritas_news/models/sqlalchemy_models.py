@@ -100,7 +100,7 @@ class BiasRating(Base):
     )
     bias_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
-    # Multi-dimensional bias scores
+    # Multi-dimensional bias scores (legacy 4-dimension system)
     partisan_bias: Mapped[float | None] = mapped_column(Float, nullable=True)
     affective_bias: Mapped[float | None] = mapped_column(Float, nullable=True)
     framing_bias: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -110,6 +110,43 @@ class BiasRating(Base):
     evaluated_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(UTC), nullable=False
     )
+
+    # SECM Binary Variables - Ideological Dimension (Left Markers)
+    secm_ideol_l1_systemic_naming: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_ideol_l2_power_gap_lexicon: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_ideol_l3_elite_culpability: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_ideol_l4_resource_redistribution: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_ideol_l5_change_as_justice: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_ideol_l6_care_harm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # SECM Binary Variables - Ideological Dimension (Right Markers)
+    secm_ideol_r1_agentic_culpability: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_ideol_r2_order_lexicon: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_ideol_r3_institutional_defense: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_ideol_r4_meritocratic_defense: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_ideol_r5_change_as_threat: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_ideol_r6_sanctity_degradation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # SECM Binary Variables - Epistemic Dimension (High Integrity Markers)
+    secm_epist_h1_primary_documentation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_epist_h2_adversarial_sourcing: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_epist_h3_specific_attribution: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_epist_h4_data_contextualization: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_epist_h5_methodological_transparency: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # SECM Binary Variables - Epistemic Dimension (Low Integrity / Erosion Markers)
+    secm_epist_e1_emotive_adjectives: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_epist_e2_labeling_othering: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_epist_e3_causal_certainty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_epist_e4_imperative_direct_address: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    secm_epist_e5_motivated_reasoning: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # SECM Final Computed Scores
+    secm_ideological_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    secm_epistemic_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # SECM Reasoning Storage (JSON)
+    secm_reasoning_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
     article: Mapped[Article] = relationship("Article", back_populates="bias_ratings")

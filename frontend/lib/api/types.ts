@@ -17,6 +17,9 @@ export interface BiasRating {
   affective_bias?: number | null;
   framing_bias?: number | null;
   sourcing_bias?: number | null;
+  // SECM scores (new ideological scoring system)
+  secm_ideological_score?: number | null;
+  secm_epistemic_score?: number | null;
 }
 
 /**

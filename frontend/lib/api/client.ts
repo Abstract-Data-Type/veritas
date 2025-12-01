@@ -185,3 +185,41 @@ export function formatBiasScore(score: number | null): string {
   }
   return "Neutral";
 }
+
+/**
+ * Format SECM ideological score for display
+ *
+ * @param score - Ideological score from -1.0 to 1.0
+ * @returns Formatted string representation
+ */
+export function formatIdeologicalScore(score: number | null | undefined): string {
+  if (score === null || score === undefined) return "N/A";
+
+  const percentage = Math.round(score * 100);
+  if (percentage < -10) {
+    return `${Math.abs(percentage)}% Left`;
+  } else if (percentage > 10) {
+    return `${percentage}% Right`;
+  }
+  return "Center";
+}
+
+/**
+ * Format SECM epistemic score for display (Evidence Rating)
+ * 
+ * Scale: -1.0 (Low Integrity) to +1.0 (High Integrity)
+ * With K=4 smoothing, typical scores stay within -0.6 to +0.6
+ *
+ * @param score - Epistemic score from -1.0 to 1.0
+ * @returns Formatted string representation
+ */
+export function formatEvidenceScore(score: number | null | undefined): string {
+  if (score === null || score === undefined) return "N/A";
+
+  // Interpret based on K=4 smoothed scale
+  if (score > 0.35) return "Strong";
+  if (score > 0.15) return "Good";
+  if (score >= -0.15) return "Mixed";
+  if (score >= -0.35) return "Weak";
+  return "Poor";
+}

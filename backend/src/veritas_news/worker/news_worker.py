@@ -19,7 +19,7 @@ from loguru import logger
 from newsapi import NewsApiClient
 from sqlalchemy.orm import Session
 
-from ..ai import rate_bias
+from ..ai import rate_bias, rate_secm
 from ..db.init_db import get_connection, init_db
 from ..models.bias_rating import normalize_score_to_range
 from ..models.sqlalchemy_models import Article, BiasRating
@@ -324,13 +324,17 @@ class NewsWorker:
             return None
 
     async def analyze_article_bias(self, db: Session, article_id: int, raw_text: str) -> bool:
-        """Analyze bias for an article and store the rating"""
+        """Analyze bias for an article and store the rating (legacy + SECM)"""
+        import json
+        
         try:
             if not raw_text or len(raw_text.strip()) < 50:
                 logger.debug(f"Article {article_id} text too short for bias analysis")
                 return False
 
             logger.info(f"Analyzing bias for article {article_id}")
+            
+            # Legacy 4-dimension analysis
             bias_result = await rate_bias(raw_text)
 
             # Extract scores from result
@@ -350,7 +354,21 @@ class NewsWorker:
             else:
                 overall_bias_score = None
 
-            # Store the bias rating
+            # SECM analysis (22 parallel LLM calls with K=4 smoothing)
+            try:
+                secm_result = await rate_secm(raw_text)
+                secm_ideological = secm_result.get("ideological_score")
+                secm_epistemic = secm_result.get("epistemic_score")
+                secm_variables = secm_result.get("variables", {})
+                secm_reasoning = secm_result.get("reasoning", {})
+            except Exception as e:
+                logger.warning(f"SECM analysis failed for article {article_id}: {e}")
+                secm_ideological = None
+                secm_epistemic = None
+                secm_variables = {}
+                secm_reasoning = {}
+
+            # Store the bias rating with SECM fields
             new_rating = BiasRating(
                 article_id=article_id,
                 bias_score=overall_bias_score,
@@ -360,15 +378,42 @@ class NewsWorker:
                 sourcing_bias=sourcing_bias,
                 reasoning=None,
                 evaluated_at=datetime.now(UTC),
+                # SECM fields
+                secm_ideological_score=secm_ideological,
+                secm_epistemic_score=secm_epistemic,
+                secm_ideol_l1_systemic_naming=secm_variables.get("secm_ideol_l1_systemic_naming"),
+                secm_ideol_l2_power_gap_lexicon=secm_variables.get("secm_ideol_l2_power_gap_lexicon"),
+                secm_ideol_l3_elite_culpability=secm_variables.get("secm_ideol_l3_elite_culpability"),
+                secm_ideol_l4_resource_redistribution=secm_variables.get("secm_ideol_l4_resource_redistribution"),
+                secm_ideol_l5_change_as_justice=secm_variables.get("secm_ideol_l5_change_as_justice"),
+                secm_ideol_l6_care_harm=secm_variables.get("secm_ideol_l6_care_harm"),
+                secm_ideol_r1_agentic_culpability=secm_variables.get("secm_ideol_r1_agentic_culpability"),
+                secm_ideol_r2_order_lexicon=secm_variables.get("secm_ideol_r2_order_lexicon"),
+                secm_ideol_r3_institutional_defense=secm_variables.get("secm_ideol_r3_institutional_defense"),
+                secm_ideol_r4_meritocratic_defense=secm_variables.get("secm_ideol_r4_meritocratic_defense"),
+                secm_ideol_r5_change_as_threat=secm_variables.get("secm_ideol_r5_change_as_threat"),
+                secm_ideol_r6_sanctity_degradation=secm_variables.get("secm_ideol_r6_sanctity_degradation"),
+                secm_epist_h1_primary_documentation=secm_variables.get("secm_epist_h1_primary_documentation"),
+                secm_epist_h2_adversarial_sourcing=secm_variables.get("secm_epist_h2_adversarial_sourcing"),
+                secm_epist_h3_specific_attribution=secm_variables.get("secm_epist_h3_specific_attribution"),
+                secm_epist_h4_data_contextualization=secm_variables.get("secm_epist_h4_data_contextualization"),
+                secm_epist_h5_methodological_transparency=secm_variables.get("secm_epist_h5_methodological_transparency"),
+                secm_epist_e1_emotive_adjectives=secm_variables.get("secm_epist_e1_emotive_adjectives"),
+                secm_epist_e2_labeling_othering=secm_variables.get("secm_epist_e2_labeling_othering"),
+                secm_epist_e3_causal_certainty=secm_variables.get("secm_epist_e3_causal_certainty"),
+                secm_epist_e4_imperative_direct_address=secm_variables.get("secm_epist_e4_imperative_direct_address"),
+                secm_epist_e5_motivated_reasoning=secm_variables.get("secm_epist_e5_motivated_reasoning"),
+                secm_reasoning_json=json.dumps(secm_reasoning) if secm_reasoning else None,
             )
 
             db.add(new_rating)
             db.commit()
 
+            secm_str = f", SECM ideo={secm_ideological:+.2f}" if secm_ideological is not None else ""
             logger.info(
                 f"Stored bias rating for article {article_id}: "
                 f"overall={overall_bias_score}, partisan={partisan_bias}, "
-                f"affective={affective_bias}, framing={framing_bias}, sourcing={sourcing_bias}"
+                f"affective={affective_bias}, framing={framing_bias}, sourcing={sourcing_bias}{secm_str}"
             )
             return True
 

@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -5,7 +6,7 @@ from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from ..ai import rate_bias, summarize_with_gemini
+from ..ai import rate_bias, rate_secm, summarize_with_gemini
 from ..db.sqlalchemy import get_session
 from ..models.bias_rating import (
     get_all_dimension_scores,
@@ -37,11 +38,14 @@ class AnalyzeArticleResponse(BaseModel):
     bias_score: float | None
     reasoning: str
     scores: dict[str, float]
-    # Multi-dimensional scores
+    # Multi-dimensional scores (legacy 4-dimension system)
     partisan_bias: float | None = None
     affective_bias: float | None = None
     framing_bias: float | None = None
     sourcing_bias: float | None = None
+    # SECM scores (new system)
+    secm_ideological_score: float | None = None
+    secm_epistemic_score: float | None = None
 
 
 @router.post("/analyze", response_model=AnalyzeArticleResponse)
@@ -97,11 +101,15 @@ async def analyze_article_bias(
             affective_bias=existing_rating.affective_bias,
             framing_bias=existing_rating.framing_bias,
             sourcing_bias=existing_rating.sourcing_bias,
+            secm_ideological_score=existing_rating.secm_ideological_score,
+            secm_epistemic_score=existing_rating.secm_epistemic_score,
         )
 
-    # Call the bias rating function directly
+    # Call both bias rating systems
     try:
         logger.info(f"Calling bias analysis for article {request.article_id}")
+        
+        # Run existing 4-dimension analysis (backward compatibility)
         bias_result = await rate_bias(article.raw_text)
 
         # Extract scores from result
@@ -121,16 +129,54 @@ async def analyze_article_bias(
         else:
             overall_bias_score = None
 
-        # Store the bias rating with all dimensions
+        # Run new SECM analysis (22 parallel LLM calls)
+        logger.info(f"Calling SECM analysis for article {request.article_id}")
+        secm_result = await rate_secm(article.raw_text)
+
+        # Extract SECM scores
+        secm_ideological_score = secm_result.get("ideological_score")
+        secm_epistemic_score = secm_result.get("epistemic_score")
+        secm_variables = secm_result.get("variables", {})
+        secm_reasoning = secm_result.get("reasoning", {})
+
+        # Store the bias rating with all dimensions (both old and new systems)
         new_rating = BiasRating(
             article_id=request.article_id,
             bias_score=overall_bias_score,
+            # Existing 4-dimension scores
             partisan_bias=partisan_bias,
             affective_bias=affective_bias,
             framing_bias=framing_bias,
             sourcing_bias=sourcing_bias,
-            reasoning=None,  # Could add reasoning extraction later
+            reasoning=None,
             evaluated_at=datetime.now(UTC),
+            # SECM scores
+            secm_ideological_score=secm_ideological_score,
+            secm_epistemic_score=secm_epistemic_score,
+            # SECM binary variables (all 22)
+            secm_ideol_l1_systemic_naming=secm_variables.get("secm_ideol_l1_systemic_naming"),
+            secm_ideol_l2_power_gap_lexicon=secm_variables.get("secm_ideol_l2_power_gap_lexicon"),
+            secm_ideol_l3_elite_culpability=secm_variables.get("secm_ideol_l3_elite_culpability"),
+            secm_ideol_l4_resource_redistribution=secm_variables.get("secm_ideol_l4_resource_redistribution"),
+            secm_ideol_l5_change_as_justice=secm_variables.get("secm_ideol_l5_change_as_justice"),
+            secm_ideol_l6_care_harm=secm_variables.get("secm_ideol_l6_care_harm"),
+            secm_ideol_r1_agentic_culpability=secm_variables.get("secm_ideol_r1_agentic_culpability"),
+            secm_ideol_r2_order_lexicon=secm_variables.get("secm_ideol_r2_order_lexicon"),
+            secm_ideol_r3_institutional_defense=secm_variables.get("secm_ideol_r3_institutional_defense"),
+            secm_ideol_r4_meritocratic_defense=secm_variables.get("secm_ideol_r4_meritocratic_defense"),
+            secm_ideol_r5_change_as_threat=secm_variables.get("secm_ideol_r5_change_as_threat"),
+            secm_ideol_r6_sanctity_degradation=secm_variables.get("secm_ideol_r6_sanctity_degradation"),
+            secm_epist_h1_primary_documentation=secm_variables.get("secm_epist_h1_primary_documentation"),
+            secm_epist_h2_adversarial_sourcing=secm_variables.get("secm_epist_h2_adversarial_sourcing"),
+            secm_epist_h3_specific_attribution=secm_variables.get("secm_epist_h3_specific_attribution"),
+            secm_epist_h4_data_contextualization=secm_variables.get("secm_epist_h4_data_contextualization"),
+            secm_epist_h5_methodological_transparency=secm_variables.get("secm_epist_h5_methodological_transparency"),
+            secm_epist_e1_emotive_adjectives=secm_variables.get("secm_epist_e1_emotive_adjectives"),
+            secm_epist_e2_labeling_othering=secm_variables.get("secm_epist_e2_labeling_othering"),
+            secm_epist_e3_causal_certainty=secm_variables.get("secm_epist_e3_causal_certainty"),
+            secm_epist_e4_imperative_direct_address=secm_variables.get("secm_epist_e4_imperative_direct_address"),
+            secm_epist_e5_motivated_reasoning=secm_variables.get("secm_epist_e5_motivated_reasoning"),
+            secm_reasoning_json=json.dumps(secm_reasoning) if secm_reasoning else None,
         )
 
         db.add(new_rating)
@@ -145,19 +191,22 @@ async def analyze_article_bias(
         logger.info(
             f"Stored bias rating {rating_id} for article {request.article_id} "
             f"with scores: partisan={partisan_bias}, affective={affective_bias}, "
-            f"framing={framing_bias}, sourcing={sourcing_bias}"
+            f"framing={framing_bias}, sourcing={sourcing_bias}, "
+            f"SECM ideological={secm_ideological_score}, SECM epistemic={secm_epistemic_score}"
         )
 
         return AnalyzeArticleResponse(
             rating_id=rating_id,
-            article_id=request.article_id,  # Use request parameter instead of DB object
+            article_id=request.article_id,
             bias_score=overall_bias_score,
-            reasoning="",  # Not storing reasoning currently
+            reasoning="",
             scores=scores,
             partisan_bias=partisan_bias,
             affective_bias=affective_bias,
             framing_bias=framing_bias,
             sourcing_bias=sourcing_bias,
+            secm_ideological_score=secm_ideological_score,
+            secm_epistemic_score=secm_epistemic_score,
         )
 
     except HTTPException:

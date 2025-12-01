@@ -8,11 +8,11 @@ summarization:
 dimensions:
   - name: partisan_bias
     prompt: |
-      On a scale of 1-7, does this article explicitly favor or criticize specific political parties, politicians, or ideologies?
-      This measures direct political alignment - does the article take sides with or against specific political entities or belief systems?
-      1 = Strongly favors/criticizes the Left (explicit support for left-leaning parties/ideologies or criticism of right-leaning ones)
-      4 = Neutral / No explicit partisan alignment
-      7 = Strongly favors/criticizes the Right (explicit support for right-leaning parties/ideologies or criticism of left-leaning ones)
+      On a scale of 1-7, does this article favor or criticize specific political parties, politicians, or ideologies (explicitly or through framing)?
+      This measures political alignment - does the article take sides with or against specific political entities or belief systems, whether overtly or through implication?
+      1 = Strongly favors/criticizes the Left (support for left-leaning parties/ideologies or criticism of right-leaning ones)
+      4 = Neutral / No discernible partisan alignment
+      7 = Strongly favors/criticizes the Right (support for right-leaning parties/ideologies or criticism of left-leaning ones)
       
       Respond with only a single number between 1 and 7.
 
@@ -43,4 +43,522 @@ dimensions:
       7 = Wide diversity of sources and viewpoints
       
       Respond with only a single number between 1 and 7.
+
+secm:
+  k: 4.0  # Damping constant for Bayesian smoothing (intensity weighting)
+  
+  ideological_variables:
+    left_markers:
+      - name: secm_ideol_l1_systemic_naming
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text name or clearly imply an abstract system (e.g., "capitalism," "patriarchy," "systemic racism," "corporate greed," "the establishment," "neoliberalism") as the primary antagonist or cause of a negative outcome?
+          
+          CRITERIA:
+          - The system must be explicitly named OR implied through framing
+          - It must be framed as the PRIMARY cause of a problem
+          - Generic terms like "the government" or "politicians" count if framed systemically
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_ideol_l2_power_gap_lexicon
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text apply adjectives indicating lack of power (e.g., "marginalized," "vulnerable," "underserved," "disenfranchised," "oppressed," "exploited," "voiceless") to describe a subject group?
+          
+          CRITERIA:
+          - Look for power-deficit language explicitly stated OR implied through framing
+          - The language must characterize a group, not just individuals
+          - Neutral descriptors count if the framing implies systemic disadvantage
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_ideol_l3_elite_culpability
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text present a non-elite source (e.g., worker, student, resident, community member, activist) criticizing or positioned against an elite source (e.g., CEO, politician, police chief, executive, billionaire)?
+          
+          CRITERIA:
+          - Criticism can be through direct quote OR paraphrased/implied through framing
+          - The criticism of elites must be clear, whether explicit or implied
+          - The article must position non-elite perspectives against elite interests
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_ideol_l4_resource_redistribution
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text advocate for, or frame favorably (explicitly or through implication), the transfer of resources (money, power, access, rights) from a wealthier/more powerful group to a poorer/less powerful group?
+          
+          CRITERIA:
+          - Advocacy can be explicit OR implied through sympathetic framing
+          - Examples: progressive taxation, wealth redistribution, reparations, universal programs
+          - Framing that portrays redistribution favorably counts, even if not overtly advocating
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_ideol_l5_change_as_justice
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text frame a disruption of the status quo (protests, reform, revolution, policy change) as a necessary step toward "justice," "equity," "fairness," or "liberation"?
+          
+          CRITERIA:
+          - Change must be framed as morally necessary or righteous, explicitly or implicitly
+          - Justice-oriented framing can be stated OR conveyed through tone and narrative structure
+          - Sympathetic coverage of change movements counts if it implies moral justification
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_ideol_l6_care_harm
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text focus detailed attention (more than 2 sentences) on the physical or emotional suffering of a human subject, with the apparent purpose of eliciting sympathy or compassion?
+          
+          CRITERIA:
+          - Sustained attention to suffering (explicit description OR implied through narrative focus)
+          - The suffering must be of HUMANS (not abstract concepts)
+          - The framing should evoke empathy/compassion, whether overtly or through subtle narrative choices
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+    
+    right_markers:
+      - name: secm_ideol_r1_agentic_culpability
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text attribute a negative outcome to the specific choices, moral failings, lack of discipline, or personal responsibility of an individual actor (rather than systems or circumstances)?
+          
+          CRITERIA:
+          - Focus on individual choices/failings can be explicit OR implied through framing
+          - The narrative should suggest personal responsibility as the primary explanation
+          - Framing that de-emphasizes systemic factors in favor of individual agency counts
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_ideol_r2_order_lexicon
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text apply adjectives indicating a breach of rules, norms, or order (e.g., "illegal," "unauthorized," "lawless," "riotous," "permissive," "anarchic," "out of control") to describe a subject group or situation?
+          
+          CRITERIA:
+          - Disorder/illegality can be stated explicitly OR implied through framing and word choice
+          - Must characterize a group or situation, not isolated individuals
+          - Framing that emphasizes chaos, rule-breaking, or norm violation counts
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_ideol_r3_institutional_defense
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text present or frame an institutional authority (e.g., police, military, business leader, clergy, government official) defending the institution against outside criticism, whether through direct quote or sympathetic framing?
+          
+          CRITERIA:
+          - Defense can be through direct quote OR through framing that validates institutional positions
+          - The article must position institutional authority favorably against critics
+          - Framing that legitimizes institutional actions or dismisses criticism counts
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_ideol_r4_meritocratic_defense
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text advocate for, or frame favorably (explicitly or through implication), the protection of property rights, merit-based selection, free enterprise, or earned hierarchies?
+          
+          CRITERIA:
+          - Advocacy can be explicit OR implied through sympathetic framing
+          - Examples: defending capitalism, praising self-made success, opposing "handouts"
+          - Framing that portrays meritocracy favorably counts, even if not overtly advocating
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_ideol_r5_change_as_threat
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text frame a disruption of the status quo (protests, reform, cultural change, policy change) as a "risk," "danger," "threat," "erosion of values," or "security concern"?
+          
+          CRITERIA:
+          - Change must be framed as dangerous or destabilizing, explicitly or implicitly
+          - Threat-oriented framing can be stated OR conveyed through tone and narrative structure
+          - Coverage that implies instability or erosion of values counts
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_ideol_r6_sanctity_degradation
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text focus detailed attention (more than 2 sentences) on the desecration of a symbol, the filth/decay of a place (especially cities), the corruption of innocence, or moral degradation of culture/society?
+          
+          CRITERIA:
+          - Sustained attention to degradation (explicit description OR implied through narrative focus)
+          - Focus on purity, sanctity, or moral decay
+          - The framing should evoke disgust or moral concern, whether overtly or through subtle cues
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+  
+  epistemic_variables:
+    high_integrity:
+      - name: secm_epist_h1_primary_documentation
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the article cite or reference a primary source document (e.g., court filing, study, dataset, legislation, official report) rather than relying solely on secondary sources like "officials say" or "according to sources"?
+          
+          CRITERIA:
+          - Must reference a primary document explicitly OR clearly indicate reliance on primary sources
+          - Examples: "According to the 50-page filing," "The raw data shows," "The bill text states"
+          - Clear references to original documents count even if not hyperlinked
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_epist_h2_adversarial_sourcing
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text include at least one direct quote or substantially paraphrased argument from a source that disagrees with the article's primary thesis or conclusion?
+          
+          CRITERIA:
+          - Must include an opposing viewpoint, whether through direct quote or fair paraphrase
+          - The opposing view should receive substantive treatment (not dismissed in a phrase)
+          - The argument must be presented, not merely acknowledged
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_epist_h3_specific_attribution
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Are more than 80% of the factual claims in the article attributed to named individuals or specific organizations, rather than anonymous "sources," "critics," "experts," or "many people"?
+          
+          CRITERIA:
+          - Estimate the proportion of claims with specific vs. anonymous attribution
+          - Named individuals/organizations = specific attribution
+          - "Sources say," "Critics argue," "Many believe" = anonymous attribution
+          - If the majority of key claims are specifically attributed, answer 1
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_epist_h4_data_contextualization
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: If a statistic is presented in the article, is it accompanied by a baseline for comparison (e.g., "10% increase year-over-year," "compared to the national average," "down from last month's figure")?
+          
+          CRITERIA:
+          - First, determine if ANY statistics are presented
+          - If NO statistics are present, answer 0
+          - If statistics ARE present, check if they include comparative context
+          - Answer 1 only if statistics exist AND are contextualized
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_epist_h5_methodological_transparency
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text indicate HOW the information was gathered (e.g., "In an interview with," "Based on a review of public records," "After analyzing court documents," "According to a survey of 500 respondents"), either explicitly or through clear implication?
+          
+          CRITERIA:
+          - Should describe methodology explicitly OR imply rigorous information gathering
+          - Look for phrases indicating interviews, document review, or data analysis
+          - Clear indication of journalistic process counts
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+    
+    low_integrity:
+      - name: secm_epist_e1_emotive_adjectives
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the headline or lead paragraph (first 1-2 paragraphs) contain subjective adjectives intended to elicit shock, outrage, or strong emotion (e.g., "Horrifying," "Shocking," "Bizarre," "Disgraceful," "Stunning," "Perfect," "Devastating")?
+          
+          CRITERIA:
+          - Focus ONLY on headline and lead paragraph
+          - Look for emotionally-charged adjectives, explicit OR implied through word choice
+          - Consider whether the language is designed to provoke emotional reaction
+          - Subtle emotional loading through framing also counts
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_epist_e2_labeling_othering
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text use reductive labels for groups of people (e.g., "The Woke," "The MAGA crowd," "Libs," "Trumpers," "Snowflakes," "Boomers," "Elites") instead of their formal or neutral designations?
+          
+          CRITERIA:
+          - Look for informal, reductive labels for groups, explicit OR implied through framing
+          - Consider whether groups are characterized dismissively or reductively
+          - Othering through framing counts, not just explicit labels
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_epist_e3_causal_certainty
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text use definitive causal language (e.g., "caused," "proved," "is because," "directly led to," "is the result of") for complex social, economic, or political phenomena where causality is legitimately debated among experts?
+          
+          CRITERIA:
+          - Look for definitive causal claims (explicit OR implied through framing) about complex issues
+          - Simple factual causation (e.g., "the fire was caused by a spark") does NOT count
+          - Framing that suggests certain causality for debated issues counts
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_epist_e4_imperative_direct_address
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text use the second person ("You") or imperative verbs ("Wake up," "Look at this," "Consider this," "Don't be fooled," "Remember") to directly address the reader?
+          
+          CRITERIA:
+          - Should directly address the reader explicitly OR through implied conversational tone
+          - Imperative commands or "you" language in the article's voice
+          - Framing that positions the reader as part of a conversation counts
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
+      
+      - name: secm_epist_e5_motivated_reasoning
+        prompt: |
+          You are a content analyst. Analyze the following article for ONE specific indicator.
+          
+          QUESTION: Does the text use "scare quotes" around a term to imply irony, skepticism, or illegitimacy (e.g., The "expert" said..., The so-called "reform"..., Their "evidence"...) without explaining the basis for the skepticism?
+          
+          CRITERIA:
+          - Look for skepticism conveyed through scare quotes OR other framing devices
+          - The skepticism can be implied through punctuation or word choice
+          - Framing that delegitimizes concepts without explanation counts
+          
+          MANDATORY: You MUST always provide a response. If the article is too short, ambiguous, or lacks sufficient information to make a definitive determination, default to 0 (Absent). Never leave the response empty or refuse to answer.
+          
+          Provide your reasoning between <reasoning> tags, then provide your final answer (0 for Absent, 1 for Present) between <answer> tags.
+          
+          <reasoning>
+          Explain your analysis here...
+          </reasoning>
+          <answer>0 or 1</answer>
+          
+          Article text:
+          {article_text}
 

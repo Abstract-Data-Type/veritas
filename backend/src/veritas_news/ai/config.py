@@ -1,6 +1,7 @@
 """Configuration management for bias analysis prompts."""
 
 from pathlib import Path
+from typing import Any
 
 from fastapi import HTTPException
 import yaml
@@ -124,4 +125,129 @@ def get_summarization_prompt_template() -> str:
     if _SUMMARIZATION_PROMPT_TEMPLATE is None:
         _SUMMARIZATION_PROMPT_TEMPLATE = load_summarization_prompt_template()
     return _SUMMARIZATION_PROMPT_TEMPLATE
+
+
+def load_secm_config() -> dict[str, Any]:
+    """
+    Load SECM configuration from prompts.yaml.
+    
+    Returns:
+        Dictionary containing:
+        - epsilon: float (smoothing factor)
+        - variables: List of all 22 variable configurations with 'name' and 'prompt'
+    
+    Raises:
+        HTTPException: 500 if config file cannot be loaded or invalid
+    """
+    config_path = Path(__file__).parent / "prompts.yaml"
+    
+    try:
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+        
+        if not config or "secm" not in config:
+            raise HTTPException(
+                status_code=500, detail="Invalid prompts.yaml: missing 'secm' key"
+            )
+        
+        secm_config = config["secm"]
+        if not isinstance(secm_config, dict):
+            raise HTTPException(
+                status_code=500,
+                detail="Invalid prompts.yaml: 'secm' must be a dictionary",
+            )
+        
+        # Extract K damping constant (default to 4.0 if not specified)
+        k = secm_config.get("k", 4.0)
+        if not isinstance(k, (int, float)) or k <= 0:
+            raise HTTPException(
+                status_code=500,
+                detail="Invalid prompts.yaml: 'secm.k' must be a positive number",
+            )
+        
+        # Collect all variables from all clusters
+        variables = []
+        
+        # Ideological left markers
+        ideol_left = secm_config.get("ideological_variables", {}).get("left_markers", [])
+        if not isinstance(ideol_left, list):
+            raise HTTPException(
+                status_code=500,
+                detail="Invalid prompts.yaml: 'secm.ideological_variables.left_markers' must be a list",
+            )
+        variables.extend(ideol_left)
+        
+        # Ideological right markers
+        ideol_right = secm_config.get("ideological_variables", {}).get("right_markers", [])
+        if not isinstance(ideol_right, list):
+            raise HTTPException(
+                status_code=500,
+                detail="Invalid prompts.yaml: 'secm.ideological_variables.right_markers' must be a list",
+            )
+        variables.extend(ideol_right)
+        
+        # Epistemic high integrity markers
+        epist_high = secm_config.get("epistemic_variables", {}).get("high_integrity", [])
+        if not isinstance(epist_high, list):
+            raise HTTPException(
+                status_code=500,
+                detail="Invalid prompts.yaml: 'secm.epistemic_variables.high_integrity' must be a list",
+            )
+        variables.extend(epist_high)
+        
+        # Epistemic low integrity markers
+        epist_low = secm_config.get("epistemic_variables", {}).get("low_integrity", [])
+        if not isinstance(epist_low, list):
+            raise HTTPException(
+                status_code=500,
+                detail="Invalid prompts.yaml: 'secm.epistemic_variables.low_integrity' must be a list",
+            )
+        variables.extend(epist_low)
+        
+        # Validate we have exactly 22 variables
+        if len(variables) != 22:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Invalid prompts.yaml: Expected 22 SECM variables, found {len(variables)}",
+            )
+        
+        # Validate each variable has required fields
+        for var in variables:
+            if not isinstance(var, dict) or "name" not in var or "prompt" not in var:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Invalid prompts.yaml: each SECM variable must have 'name' and 'prompt' fields",
+                )
+        
+        return {
+            "k": float(k),
+            "variables": variables,
+        }
+    
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=500, detail=f"Configuration file not found: {config_path}"
+        )
+    except yaml.YAMLError as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error parsing prompts.yaml: {str(e)}"
+        )
+
+
+# Cache the SECM config at module level
+_SECM_CONFIG: dict[str, Any] | None = None
+
+
+def get_secm_config() -> dict[str, Any]:
+    """Get cached SECM configuration, loading it if necessary."""
+    global _SECM_CONFIG
+    if _SECM_CONFIG is None:
+        _SECM_CONFIG = load_secm_config()
+    return _SECM_CONFIG
+
+
+def get_secm_k() -> float:
+    """Get K damping constant from SECM config (default 4.0)."""
+    config = get_secm_config()
+    return config["k"]
 

@@ -3,13 +3,14 @@
 import asyncio
 import os
 import re
+from typing import Any
 
 from fastapi import HTTPException
 from google import genai
 from google.genai import types
 
-from .config import get_prompts_config
-from .scoring import score_bias
+from .config import get_prompts_config, get_secm_config
+from .scoring import score_bias, score_secm
 
 
 def parse_llm_score(response_text: str) -> float:
@@ -223,7 +224,7 @@ async def rate_bias_parallel(
     return scores
 
 
-async def rate_bias(article_text: str) -> dict[str, any]:
+async def rate_bias(article_text: str) -> dict[str, Any]:
     """
     Main function to rate bias for an article (converted from FastAPI endpoint).
 
@@ -269,4 +270,231 @@ async def rate_bias(article_text: str) -> dict[str, any]:
     final_scores = score_bias(raw_scores)
 
     return {"scores": final_scores, "ai_model": model}
+
+
+def parse_secm_response(response_text: str) -> tuple[int, str]:
+    """
+    Parse SECM LLM response with XML tags.
+    
+    Extracts reasoning from <reasoning> tags and binary answer from <answer> tags.
+    Falls back to fuzzy matching if XML tags are missing.
+    
+    Args:
+        response_text: Raw text response from LLM
+    
+    Returns:
+        Tuple of (binary_answer: 0 or 1, reasoning: str)
+    
+    Raises:
+        ValueError: If response cannot be parsed
+    """
+    if not response_text or not response_text.strip():
+        raise ValueError("Empty response from LLM")
+    
+    text = response_text.strip()
+    
+    # Try to extract reasoning from XML tags
+    reasoning_match = re.search(r"<reasoning>(.*?)</reasoning>", text, re.DOTALL | re.IGNORECASE)
+    reasoning = reasoning_match.group(1).strip() if reasoning_match else ""
+    
+    # Try to extract answer from XML tags
+    answer_match = re.search(r"<answer>(.*?)</answer>", text, re.DOTALL | re.IGNORECASE)
+    if answer_match:
+        answer_text = answer_match.group(1).strip()
+        # Extract 0 or 1 from answer tag
+        if "1" in answer_text or "one" in answer_text.lower():
+            binary_answer = 1
+        elif "0" in answer_text or "zero" in answer_text.lower() or "absent" in answer_text.lower():
+            binary_answer = 0
+        else:
+            raise ValueError(f"Could not parse binary answer from <answer> tag: {answer_text}")
+    else:
+        # Fallback: search for 0 or 1 in the text
+        if re.search(r"\b1\b", text) or "present" in text.lower() or "yes" in text.lower():
+            binary_answer = 1
+        elif re.search(r"\b0\b", text) or "absent" in text.lower() or "no" in text.lower():
+            binary_answer = 0
+        else:
+            raise ValueError(f"Could not extract binary answer from response: {text}")
+    
+    # If no reasoning found, use empty string
+    if not reasoning:
+        reasoning = ""
+    
+    return binary_answer, reasoning
+
+
+async def call_llm_for_secm_variable(
+    article_text: str,
+    variable_config: dict[str, str],
+    model: str = "gemini-2.5-flash",
+    temperature: float = 0.1,
+    max_retries: int = 3,
+    retry_delay: float = 1.0,
+) -> tuple[int, str]:
+    """
+    Call LLM for a single SECM variable with retry logic.
+    
+    Args:
+        article_text: The full text of the article to analyze
+        variable_config: Dictionary with 'name' and 'prompt' keys
+        model: Gemini model name (default: gemini-2.5-flash)
+        temperature: Temperature for generation (default: 0.1)
+        max_retries: Maximum number of retry attempts (default: 3)
+        retry_delay: Delay between retries in seconds (default: 1.0)
+    
+    Returns:
+        Tuple of (binary_answer: 0 or 1, reasoning: str)
+    
+    Raises:
+        Exception: If API call fails after all retries
+    """
+    prompt = variable_config["prompt"]
+    var_name = variable_config.get("name", "unknown")
+    last_error = None
+    
+    for attempt in range(max_retries):
+        try:
+            # Run synchronous Gemini call in thread pool
+            response_text = await asyncio.to_thread(
+                _call_gemini_sync, article_text, prompt, model, temperature
+            )
+            
+            # Parse and validate the response
+            binary_answer, reasoning = parse_secm_response(response_text)
+            return binary_answer, reasoning
+            
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                # Log retry attempt and wait before next try
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"SECM variable '{var_name}' attempt {attempt + 1}/{max_retries} failed: {e}. Retrying..."
+                )
+                await asyncio.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+            else:
+                # Final attempt failed
+                import logging
+                logging.getLogger(__name__).error(
+                    f"SECM variable '{var_name}' failed after {max_retries} attempts: {e}"
+                )
+    
+    # All retries exhausted
+    raise last_error or RuntimeError(f"SECM variable '{var_name}' failed with no error details")
+
+
+async def rate_secm_parallel(
+    article_text: str,
+    variable_configs: list[dict[str, str]],
+    model: str = "gemini-2.5-flash",
+) -> dict[str, tuple[int, str]]:
+    """
+    Orchestrate parallel LLM calls for all SECM variables.
+    
+    Creates N async tasks (one per variable) and executes them concurrently.
+    If any call fails, the entire operation fails (atomic requirement).
+    
+    Args:
+        article_text: The full text of the article to analyze
+        variable_configs: List of variable configurations
+        model: Gemini model name
+    
+    Returns:
+        Dictionary mapping variable names to (answer, reasoning) tuples
+    
+    Raises:
+        HTTPException: 502 if any LLM call fails
+    """
+    # Create async tasks for all variables
+    tasks = [
+        call_llm_for_secm_variable(article_text, var_config, model)
+        for var_config in variable_configs
+    ]
+    
+    # Execute all tasks in parallel
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Check for failures - if any task failed, fail the entire request (atomic)
+    variable_results: dict[str, tuple[int, str]] = {}
+    errors = []
+    
+    for i, result in enumerate(results):
+        var_name = variable_configs[i]["name"]
+        
+        if isinstance(result, Exception):
+            errors.append(f"Variable '{var_name}': {str(result)}")
+        else:
+            variable_results[var_name] = result
+    
+    # If any call failed, raise 502 (atomic requirement)
+    if errors:
+        error_msg = "; ".join(errors)
+        raise HTTPException(status_code=502, detail=f"SECM rating failed: {error_msg}")
+    
+    return variable_results
+
+
+async def rate_secm(article_text: str) -> dict[str, Any]:
+    """
+    Main SECM analysis function.
+    
+    Makes 22 parallel LLM calls (one per SECM variable) and computes final scores.
+    The function is atomic: if any variable analysis fails, the entire request fails.
+    
+    Args:
+        article_text: The full text of the article to analyze (required, non-empty)
+    
+    Returns:
+        Dictionary with:
+        - ideological_score: float (-1.0 to +1.0)
+        - epistemic_score: float (-1.0 to +1.0)
+        - variables: Dictionary mapping variable names to binary values (0/1)
+        - reasoning: Dictionary mapping variable names to reasoning strings
+        - ai_model: The AI model used for analysis
+    
+    Raises:
+        HTTPException: 500 if config/API key missing, 502 if LLM calls fail
+    """
+    model = "gemini-2.5-flash"
+    
+    # Get SECM configuration (cached at module level)
+    try:
+        secm_config = get_secm_config()
+    except HTTPException:
+        # Re-raise config errors as-is (already 500 status)
+        raise
+    
+    # Validate API key is configured
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
+    
+    # Execute parallel LLM calls for all variables
+    try:
+        variable_results = await rate_secm_parallel(
+            article_text, secm_config["variables"], model
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions (e.g., 502 from rate_secm_parallel)
+        raise
+    except Exception as e:
+        # Catch any unexpected errors
+        raise HTTPException(status_code=502, detail=f"SECM rating failed: {str(e)}")
+    
+    # Extract variables and reasoning dictionaries
+    variables = {name: result[0] for name, result in variable_results.items()}
+    reasoning = {name: result[1] for name, result in variable_results.items()}
+    
+    # Compute final scores using SECM scoring algorithm with Bayesian smoothing
+    k = secm_config["k"]
+    final_scores = score_secm(variables, k)
+    
+    return {
+        "ideological_score": final_scores["ideological_score"],
+        "epistemic_score": final_scores["epistemic_score"],
+        "variables": variables,
+        "reasoning": reasoning,
+        "ai_model": model,
+    }
 

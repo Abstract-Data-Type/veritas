@@ -148,7 +148,7 @@ class DatabaseRefresher:
             # Find articles without bias ratings
             articles_without_ratings = db.query(Article).outerjoin(
                 BiasRating, Article.article_id == BiasRating.article_id
-            ).filter(BiasRating.rating_id is None).all()
+            ).filter(BiasRating.rating_id.is_(None)).all()
 
             if not articles_without_ratings:
                 logger.info("All articles have bias ratings")

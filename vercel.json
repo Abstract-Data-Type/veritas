@@ -1,0 +1,28 @@
+{
+    "builds": [
+        {
+            "src": "frontend/package.json",
+            "use": "@vercel/next"
+        },
+        {
+            "src": "backend/index.py",
+            "use": "@vercel/python"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/api/(.*)",
+            "dest": "/backend/index.py"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "/frontend/$1"
+        }
+    ],
+    "crons": [
+        {
+            "path": "/api/articles/fetch?use_newsapi=true&limit=10",
+            "schedule": "0 * * * *"
+        }
+    ]
+}

@@ -9,6 +9,34 @@ from ..models.sqlalchemy_models import Article, BiasRating
 
 router = APIRouter()
 
+from fastapi import Header, HTTPException
+import os
+from ..worker.news_worker import NewsWorker
+
+@router.get("/fetch")
+async def trigger_fetch(
+    authorization: str | None = Header(default=None),
+    use_newsapi: bool = Query(default=False),
+    use_cnn: bool = Query(default=False),
+    limit: int = Query(default=5),
+):
+    """
+    Trigger a news fetch manually.
+    Protected by Authorization header (Bearer CRON_SECRET).
+    """
+    expected_secret = os.getenv("CRON_SECRET")
+    # If CRON_SECRET is not set, deny all requests for security
+    if not expected_secret:
+        raise HTTPException(status_code=401, detail="CRON_SECRET not configured")
+    
+    if not authorization or authorization != f"Bearer {expected_secret}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    worker = NewsWorker(limit=limit)
+    count = await worker.run_single_fetch(use_cnn=use_cnn, use_newsapi=use_newsapi)
+    return {"status": "ok", "fetched": count}
+
+
 
 class BiasRatingInfo(BaseModel):
     """Bias rating information for an article"""

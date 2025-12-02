@@ -12,6 +12,7 @@ if env_path.exists():
 
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime, UTC
 import os
 
 from fastapi import FastAPI
@@ -26,6 +27,14 @@ from .worker.news_worker import NewsWorker
 # Global worker instance and task
 worker_task = None
 news_worker = None
+
+# Maintenance mode state
+maintenance_state = {
+    "is_running": False,
+    "started_at": None,
+    "last_completed": None,
+    "next_refresh": None,
+}
 
 
 @asynccontextmanager
@@ -56,26 +65,53 @@ async def lifespan(app: FastAPI):
 
         news_worker = NewsWorker(hours_back=hours_back, limit=limit)
 
-        # Determine which fetch method to use
+        # 12-hour refresh cycle
+        refresh_interval = 12 * 60 * 60  # 12 hours in seconds
+
         async def worker_loop():
+            global maintenance_state
+            first_run = True
             while news_worker.running:
                 try:
-                    await news_worker.run_single_fetch(
+                    # Set maintenance mode ON
+                    maintenance_state["is_running"] = True
+                    maintenance_state["started_at"] = datetime.now(UTC).isoformat()
+
+                    if first_run:
+                        logger.info("🚀 Running initial article fetch with summary + LCCM analysis...")
+                        first_run = False
+                    else:
+                        logger.info("🔄 Starting 12-hour refresh cycle...")
+                        # Clear old articles before fetching new ones
+                        logger.info("🗑️ Clearing old articles...")
+                        news_worker.clear_database()
+
+                    count = await news_worker.run_single_fetch(
                         use_cnn=use_cnn, use_newsapi=use_newsapi
                     )
-                    # Wait before next fetch
-                    interval = int(os.getenv("WORKER_SCHEDULE_INTERVAL", "1800"))
-                    await asyncio.sleep(interval)
+                    logger.info(f"📊 Fetch cycle complete: {count} articles processed with full LLM analysis")
+
+                    # Set maintenance mode OFF
+                    maintenance_state["is_running"] = False
+                    maintenance_state["last_completed"] = datetime.now(UTC).isoformat()
+                    maintenance_state["next_refresh"] = datetime.fromtimestamp(
+                        datetime.now(UTC).timestamp() + refresh_interval, UTC
+                    ).isoformat()
+
+                    logger.info("⏰ Next refresh in 12 hours")
+                    await asyncio.sleep(refresh_interval)
                 except asyncio.CancelledError:
                     logger.info("Worker cancelled")
+                    maintenance_state["is_running"] = False
                     break
                 except Exception as e:
-                    logger.error(f"Worker error: {e}")
+                    logger.error(f"❌ Worker error: {e}")
+                    maintenance_state["is_running"] = False
                     await asyncio.sleep(60)
 
         news_worker.running = True
         worker_task = asyncio.create_task(worker_loop())
-        logger.info("✅ Background worker started")
+        logger.info("✅ Background worker started (12-hour refresh cycle)")
     else:
         logger.info("⏸️  Background worker disabled (set WORKER_ENABLED=true to enable)")
 
@@ -117,6 +153,15 @@ app.include_router(articles_router, prefix="/articles", tags=["Articles"])
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "Veritas News API is running."}
+
+
+@app.get("/status")
+def get_status():
+    """Get current system status including maintenance mode"""
+    return {
+        "status": "ok",
+        "maintenance": maintenance_state,
+    }
 
 
 def run():

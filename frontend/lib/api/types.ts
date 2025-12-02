@@ -53,6 +53,24 @@ export interface SummarizeResponse {
 }
 
 /**
+ * Maintenance state from /status endpoint
+ */
+export interface MaintenanceState {
+  is_running: boolean;
+  started_at: string | null;
+  last_completed: string | null;
+  next_refresh: string | null;
+}
+
+/**
+ * Response from /status endpoint
+ */
+export interface StatusResponse {
+  status: string;
+  maintenance: MaintenanceState;
+}
+
+/**
  * Political leaning categories based on bias score
  * Scores range from -1.0 (far left) to 1.0 (far right)
  */

@@ -100,7 +100,7 @@ class ReutersFetcher:
 class RSSFetcher:
     """RSS feed parser that fetches real articles from RSS feeds"""
 
-    def __init__(self, feeds: list[str], limit_per_feed: int = 10):
+    def __init__(self, feeds: list[str], limit_per_feed: int = 5):
         self.feeds = feeds
         self.limit_per_feed = limit_per_feed
 

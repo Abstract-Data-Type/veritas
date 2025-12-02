@@ -57,30 +57,9 @@ export function ArticleCard({ article }: ArticleCardProps) {
         </div>
 
         {/* SECM Scores Section */}
-        {article.bias_rating && (
+        {article.bias_rating ? (
           <div className={articleCard.biasSection}>
-            {/* OLD: Legacy 4-dimension bias score - commented out in favor of SECM
-            <div className="flex items-center justify-between mb-1">
-              <span className={articleCard.biasLabel}>Bias Score</span>
-              <span className={articleCard.biasScore}>
-                {formatBiasScore(article.bias_rating.bias_score)}
-              </span>
-            </div>
-            <div className={articleCard.biasBar}>
-              <div
-                className={cn("h-full transition-all", theme.barColor)}
-                style={{
-                  width: `${Math.abs((article.bias_rating.bias_score ?? 0) * 50) + 50}%`,
-                  marginLeft:
-                    (article.bias_rating.bias_score ?? 0) < 0
-                      ? `${50 - Math.abs((article.bias_rating.bias_score ?? 0) * 50)}%`
-                      : "50%",
-                }}
-              />
-            </div>
-            */}
-
-            {/* New Ideological Score (Beta) */}
+            {/* New Ideological Score */}
             {article.bias_rating.secm_ideological_score !== null && 
              article.bias_rating.secm_ideological_score !== undefined && (
               <div className="pt-2">
@@ -148,13 +127,21 @@ export function ArticleCard({ article }: ArticleCardProps) {
               </div>
             )}
 
-            {/* Methodology Link */}
+            {/* Methodology Link or Pending */}
             {(article.bias_rating.secm_ideological_score !== null || 
-              article.bias_rating.secm_epistemic_score !== null) && (
+              article.bias_rating.secm_epistemic_score !== null) ? (
               <div className="mt-3 pt-2 border-t border-gray-100 text-center">
                 <MethodologyModal />
               </div>
+            ) : (
+              <div className="text-center text-gray-400 text-sm italic py-2">
+                Analysis pending...
+              </div>
             )}
+          </div>
+        ) : (
+          <div className={cn(articleCard.biasSection, "text-center text-gray-400 text-sm italic")}>
+            Analysis pending...
           </div>
         )}
       </article>

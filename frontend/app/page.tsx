@@ -1,8 +1,8 @@
-import { fetchArticles } from "@/lib/api/client";
-import { Article } from "@/lib/api/types";
+import { fetchArticles, fetchStatus } from "@/lib/api/client";
+import { Article, StatusResponse } from "@/lib/api/types";
 import { ArticleCard, ArticleCardSkeleton } from "./components/ArticleCard";
 import { Suspense } from "react";
-import { layout, typography, legend, error, skeleton, cn } from "@/lib/theme";
+import { layout, typography, legend, error, cn } from "@/lib/theme";
 
 // =============================================================================
 // HELPERS
@@ -46,6 +46,30 @@ function ErrorDisplay({ message }: { message: string }) {
   );
 }
 
+function MaintenanceDisplay() {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 px-6">
+      <div className="relative mb-8">
+        {/* Animated spinner */}
+        <div className="w-20 h-20 border-4 border-gray-200 border-t-crimson rounded-full animate-spin" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-2xl">🔬</span>
+        </div>
+      </div>
+      <h2 className="text-2xl font-bold text-gray-800 mb-3">
+        Analysis in Progress
+      </h2>
+      <p className="text-gray-600 text-center max-w-md mb-4">
+        We&apos;re fetching fresh articles and running our AI bias analysis.
+        This typically takes a few minutes.
+      </p>
+      <p className="text-sm text-gray-500">
+        Please check back soon!
+      </p>
+    </div>
+  );
+}
+
 function BiasLegend() {
   return (
     <div className={legend.wrapper}>
@@ -69,16 +93,27 @@ function BiasLegend() {
 async function ArticlesGrid() {
   let articles: Article[] = [];
   let errorMsg: string | null = null;
+  let isMaintenanceMode = false;
 
   try {
-    const response = await fetchArticles({ limit: 100 });
-    articles = sortArticlesByDate(response.articles);
+    // Check maintenance status first
+    const status = await fetchStatus();
+    isMaintenanceMode = status.maintenance.is_running;
+    
+    if (!isMaintenanceMode) {
+      const response = await fetchArticles({ limit: 100 });
+      articles = sortArticlesByDate(response.articles);
+    }
   } catch (e) {
     errorMsg = e instanceof Error ? e.message : "Failed to load articles";
   }
 
   if (errorMsg) {
     return <ErrorDisplay message={errorMsg} />;
+  }
+
+  if (isMaintenanceMode) {
+    return <MaintenanceDisplay />;
   }
 
   if (articles.length === 0) {

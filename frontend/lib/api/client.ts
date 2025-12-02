@@ -5,7 +5,7 @@
  * All endpoints are documented in backend/src/veritas_news/api/
  */
 
-import { Article, ArticleListResponse, SummarizeResponse } from "./types";
+import { Article, ArticleListResponse, StatusResponse, SummarizeResponse } from "./types";
 
 /**
  * Get the API base URL from environment variables
@@ -73,6 +73,15 @@ async function apiFetch<T>(
       "Network Error"
     );
   }
+}
+
+/**
+ * Fetch system status including maintenance mode
+ *
+ * @returns Promise resolving to StatusResponse
+ */
+export async function fetchStatus(): Promise<StatusResponse> {
+  return apiFetch<StatusResponse>("/status");
 }
 
 /**
@@ -218,8 +227,8 @@ export function formatEvidenceScore(score: number | null | undefined): string {
 
   // Interpret based on K=4 smoothed scale
   if (score > 0.35) return "Strong";
-  if (score > 0.15) return "Good";
-  if (score >= -0.15) return "Mixed";
+  if (score > 0.10) return "Good";
+  if (score >= -0.10) return "Mixed";
   if (score >= -0.35) return "Weak";
   return "Poor";
 }

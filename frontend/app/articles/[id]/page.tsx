@@ -95,6 +95,24 @@ export default async function ArticleDetailPage({ params }: PageProps) {
           </div>
         </div>
 
+        {/* Summary section */}
+        <div className="border-b border-gray-200 px-6 py-6">
+          <h2 className={cn(typography.h2, "mb-3")}>Summary</h2>
+          {summaryError ? (
+            <div className="rounded-lg border-2 border-yellow-300 bg-yellow-50 p-4">
+              <p className="text-sm text-yellow-700">
+                <strong>Unable to generate summary:</strong> {summaryError}
+              </p>
+            </div>
+          ) : summary ? (
+            <p className="text-gray-700">{summary}</p>
+          ) : (
+            <p className="text-sm italic text-gray-500">
+              No article content available for summarization.
+            </p>
+          )}
+        </div>
+
         {/* Bias details */}
         {article.bias_rating && (
           <div className="border-b border-gray-200 px-6 py-4">
@@ -126,12 +144,7 @@ export default async function ArticleDetailPage({ params }: PageProps) {
               {article.bias_rating.secm_ideological_score !== null && 
                article.bias_rating.secm_ideological_score !== undefined && (
                 <div className="col-span-2 mt-2 p-4 rounded-lg bg-amber-50 border border-amber-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="font-semibold text-amber-900">Ideological Spectrum</h3>
-                    <span className="text-xs font-medium px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full">
-                      BETA
-                    </span>
-                  </div>
+                  <h3 className="font-semibold text-amber-900 mb-2">Ideological Spectrum</h3>
                   <p className="text-xs text-amber-700 mb-3">
                     Detects how the text assigns blame: failures of systems/structures (Left) vs failures of individuals/choices (Right)
                   </p>
@@ -154,7 +167,7 @@ export default async function ArticleDetailPage({ params }: PageProps) {
                       {formatIdeologicalScore(article.bias_rating.secm_ideological_score)}
                     </span>
                     <span className="text-xs text-amber-700 ml-2">
-                      (raw: {article.bias_rating.secm_ideological_score?.toFixed(3)})
+                      (raw: {article.bias_rating.secm_ideological_score?.toFixed(2)})
                     </span>
                   </div>
                 </div>
@@ -164,12 +177,7 @@ export default async function ArticleDetailPage({ params }: PageProps) {
               {article.bias_rating.secm_epistemic_score !== null && 
                article.bias_rating.secm_epistemic_score !== undefined && (
                 <div className="col-span-2 mt-2 p-4 rounded-lg bg-emerald-50 border border-emerald-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="font-semibold text-emerald-900">Epistemic Integrity</h3>
-                    <span className="text-xs font-medium px-2 py-0.5 bg-emerald-200 text-emerald-800 rounded-full">
-                      BETA
-                    </span>
-                  </div>
+                  <h3 className="font-semibold text-emerald-900 mb-2">Epistemic Integrity</h3>
                   <p className="text-xs text-emerald-700 mb-3">
                     Audits information quality: source citation and evidence (High) vs emotional language and unsubstantiated claims (Low)
                   </p>
@@ -192,7 +200,7 @@ export default async function ArticleDetailPage({ params }: PageProps) {
                       {formatEvidenceScore(article.bias_rating.secm_epistemic_score)}
                     </span>
                     <span className="text-xs text-emerald-700 ml-2">
-                      (raw: {article.bias_rating.secm_epistemic_score?.toFixed(3)})
+                      (raw: {article.bias_rating.secm_epistemic_score?.toFixed(2)})
                     </span>
                   </div>
                 </div>
@@ -214,24 +222,6 @@ export default async function ArticleDetailPage({ params }: PageProps) {
             </div>
           </div>
         )}
-
-        {/* Summary section */}
-        <div className="px-6 py-6">
-          <h2 className={cn(typography.h2, "mb-3")}>Summary</h2>
-          {summaryError ? (
-            <div className="rounded-lg border-2 border-yellow-300 bg-yellow-50 p-4">
-              <p className="text-sm text-yellow-700">
-                <strong>Unable to generate summary:</strong> {summaryError}
-              </p>
-            </div>
-          ) : summary ? (
-            <p className="text-gray-700">{summary}</p>
-          ) : (
-            <p className="text-sm italic text-gray-500">
-              No article content available for summarization.
-            </p>
-          )}
-        </div>
 
         {/* Actions */}
         <div className="border-t border-gray-200 bg-gray-50 px-6 py-4">

@@ -20,7 +20,7 @@ class WorkerConfig:
 
     # RSS Sources - these are the default RSS feeds that work reliably
     RSS_FEEDS = [
-        "https://feeds.bbci.co.uk/news/rss.xml",
+        # "https://feeds.bbci.co.uk/news/rss.xml",
         "https://feeds.bbci.co.uk/news/world/rss.xml",
         "https://feeds.npr.org/1001/rss.xml",  # NPR News
         "http://feeds.foxnews.com/foxnews/politics",  # Fox News Latest Headlines

@@ -145,6 +145,8 @@ async def call_llm_for_dimension(
     dimension_config: dict[str, str],
     model: str = "gemini-2.5-flash",
     temperature: float = 0.1,
+    max_retries: int = 5,
+    retry_delay: float = 1.0,
 ) -> float:
     """
     Async wrapper for Gemini API call that processes a single bias dimension.
@@ -154,23 +156,40 @@ async def call_llm_for_dimension(
         dimension_config: Dictionary with 'name' and 'prompt' keys
         model: Gemini model name (default: gemini-2.5-flash)
         temperature: Temperature for generation (default: 0.1)
+        max_retries: Maximum number of retry attempts (default: 5)
+        retry_delay: Delay between retries in seconds (default: 1.0)
 
     Returns:
         Parsed score as float (1-7)
 
     Raises:
-        Exception: If API call fails or response cannot be parsed
+        Exception: If API call fails after all retries
     """
     prompt = dimension_config["prompt"]
+    dim_name = dimension_config.get("name", "unknown")
+    last_error = None
 
-    # Run synchronous Gemini call in thread pool
-    response_text = await asyncio.to_thread(
-        _call_gemini_sync, article_text, prompt, model, temperature
-    )
+    for attempt in range(max_retries):
+        try:
+            # Run synchronous Gemini call in thread pool
+            response_text = await asyncio.to_thread(
+                _call_gemini_sync, article_text, prompt, model, temperature
+            )
 
-    # Parse and validate the response
-    score = parse_llm_score(response_text)
-    return score
+            # Parse and validate the response
+            score = parse_llm_score(response_text)
+            return score
+
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"Dimension '{dim_name}' attempt {attempt + 1}/{max_retries} failed: {e}. Retrying..."
+                )
+                await asyncio.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+
+    raise last_error or RuntimeError(f"Dimension '{dim_name}' failed with no error details")
 
 
 async def rate_bias_parallel(
@@ -182,7 +201,7 @@ async def rate_bias_parallel(
     Orchestrate parallel LLM calls for all bias dimensions.
 
     Creates N async tasks (one per dimension) and executes them concurrently.
-    If any call fails, the entire operation fails (atomic requirement).
+    Returns partial results if some dimensions fail (resilient mode).
 
     Args:
         article_text: The full text of the article to analyze
@@ -190,10 +209,10 @@ async def rate_bias_parallel(
         model: Gemini model name
 
     Returns:
-        Dictionary mapping dimension names to scores
+        Dictionary mapping dimension names to scores (may be partial)
 
     Raises:
-        HTTPException: 502 if any LLM call fails
+        HTTPException: 502 only if ALL dimensions fail
     """
     # Create async tasks for all dimensions
     tasks = [
@@ -204,7 +223,6 @@ async def rate_bias_parallel(
     # Execute all tasks in parallel
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # Check for failures - if any task failed, fail the entire request (atomic)
     scores = {}
     errors = []
 
@@ -216,10 +234,14 @@ async def rate_bias_parallel(
         else:
             scores[dim_name] = result
 
-    # If any call failed, raise 502 (atomic requirement)
+    # Log errors but continue with partial results
     if errors:
-        error_msg = "; ".join(errors)
-        raise HTTPException(status_code=502, detail=f"Bias rating failed: {error_msg}")
+        import logging
+        logging.getLogger(__name__).warning(f"Some bias dimensions failed: {'; '.join(errors)}")
+
+    # Only fail if ALL dimensions failed
+    if not scores:
+        raise HTTPException(status_code=502, detail=f"Bias rating failed: {'; '.join(errors)}")
 
     return scores
 
@@ -393,7 +415,7 @@ async def rate_secm_parallel(
     Orchestrate parallel LLM calls for all SECM variables.
     
     Creates N async tasks (one per variable) and executes them concurrently.
-    If any call fails, the entire operation fails (atomic requirement).
+    Returns partial results if some variables fail (resilient mode).
     
     Args:
         article_text: The full text of the article to analyze
@@ -401,10 +423,10 @@ async def rate_secm_parallel(
         model: Gemini model name
     
     Returns:
-        Dictionary mapping variable names to (answer, reasoning) tuples
+        Dictionary mapping variable names to (answer, reasoning) tuples (may be partial)
     
     Raises:
-        HTTPException: 502 if any LLM call fails
+        HTTPException: 502 only if ALL variables fail
     """
     # Create async tasks for all variables
     tasks = [
@@ -415,7 +437,6 @@ async def rate_secm_parallel(
     # Execute all tasks in parallel
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
-    # Check for failures - if any task failed, fail the entire request (atomic)
     variable_results: dict[str, tuple[int, str]] = {}
     errors = []
     
@@ -427,10 +448,14 @@ async def rate_secm_parallel(
         else:
             variable_results[var_name] = result
     
-    # If any call failed, raise 502 (atomic requirement)
+    # Log errors but continue with partial results
     if errors:
-        error_msg = "; ".join(errors)
-        raise HTTPException(status_code=502, detail=f"SECM rating failed: {error_msg}")
+        import logging
+        logging.getLogger(__name__).warning(f"Some SECM variables failed: {'; '.join(errors)}")
+    
+    # Only fail if ALL variables failed
+    if not variable_results:
+        raise HTTPException(status_code=502, detail=f"SECM rating failed: {'; '.join(errors)}")
     
     return variable_results
 

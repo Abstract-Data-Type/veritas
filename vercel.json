@@ -21,11 +21,5 @@
             "src": "/(.*)",
             "dest": "/frontend"
         }
-    ],
-    "crons": [
-        {
-            "path": "/api/articles/fetch?use_newsapi=true&limit=10",
-            "schedule": "0 * * * *"
-        }
     ]
 }

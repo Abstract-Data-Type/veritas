@@ -152,7 +152,7 @@ class TestE2ERefreshCycle:
 
             # ===== PHASE 3: Fetch and process with REAL LLM =====
             count = await worker.run_single_fetch(
-                use_stub=False,  # Real RSS feeds
+                # Real RSS feeds
                 run_llm=True     # Real LLM analysis
             )
 
@@ -215,7 +215,7 @@ class TestE2ERefreshCycle:
             worker = NewsWorker(limit=1)
 
             # ===== Initial population =====
-            initial_count = await worker.run_single_fetch(use_stub=False, run_llm=False)
+            initial_count = await worker.run_single_fetch(run_llm=False)
             assert initial_count > 0
 
             db.expire_all()
@@ -229,7 +229,7 @@ class TestE2ERefreshCycle:
             assert db.query(Article).count() == 0
 
             # ===== Refetch (new cycle) =====
-            new_count = await worker.run_single_fetch(use_stub=False, run_llm=False)
+            new_count = await worker.run_single_fetch(run_llm=False)
             assert new_count > 0
 
             db.expire_all()
@@ -352,7 +352,7 @@ class TestE2EMaintenanceFlow:
 
             # Do real work
             worker = NewsWorker(limit=1)
-            await worker.run_single_fetch(use_stub=False, run_llm=False)
+            await worker.run_single_fetch(run_llm=False)
 
             # Complete processing
             maintenance_state["is_running"] = False

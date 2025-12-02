@@ -94,19 +94,26 @@ class TestWorkerIntegration:
             assert veritas_news.main.news_worker is None
 
     @pytest.mark.asyncio
-    async def test_news_worker_fetch_stubbed(self, temp_db):
-        """Test that NewsWorker can fetch and store stubbed articles"""
+    async def test_news_worker_fetch_articles(self, temp_db):
+        """Test that NewsWorker can fetch and store articles"""
         db_path, engine = temp_db
 
         # Create worker instance
         worker = NewsWorker(hours_back=1, limit=5)
 
-        # Fetch stubbed articles (explicitly using stub mode)
-        stored_count = await worker.run_single_fetch(use_stub=True)
+        # Mock RSS fetch with test articles
+        async def mock_rss():
+            from datetime import UTC, datetime
+            return [
+                {"title": "Test 1", "source": "Test", "url": "https://test.com/1", "raw_text": "Content", "published_at": datetime.now(UTC)},
+                {"title": "Test 2", "source": "Test", "url": "https://test.com/2", "raw_text": "Content", "published_at": datetime.now(UTC)},
+            ]
+        worker.fetch_rss_articles = mock_rss
+        stored_count = await worker.run_single_fetch(run_llm=False)
 
         # Should have stored some articles
-        assert stored_count > 0, "Worker should store stubbed articles"
-        assert stored_count == 2, "Stubbed fetch should return 2 articles"
+        assert stored_count > 0, "Worker should store articles"
+        assert stored_count == 2, "Should return 2 articles"
 
     @pytest.mark.asyncio
     async def test_worker_duplicate_detection(self, temp_db):
@@ -115,8 +122,15 @@ class TestWorkerIntegration:
 
         worker = NewsWorker(hours_back=1, limit=5)
 
-        # First fetch - should store articles (use stub for deterministic test)
-        stored_count_1 = await worker.run_single_fetch(use_stub=True)
+        # Mock RSS with test articles
+        async def mock_rss():
+            from datetime import UTC, datetime
+            return [
+                {"title": "Test 1", "source": "Test", "url": "https://test.com/dup1", "raw_text": "Content", "published_at": datetime.now(UTC)},
+                {"title": "Test 2", "source": "Test", "url": "https://test.com/dup2", "raw_text": "Content", "published_at": datetime.now(UTC)},
+            ]
+        worker.fetch_rss_articles = mock_rss
+        stored_count_1 = await worker.run_single_fetch(run_llm=False)
         assert stored_count_1 > 0
 
         # Check in-memory tracking exists
@@ -128,11 +142,20 @@ class TestWorkerIntegration:
         db_path, engine = temp_db
 
         worker = NewsWorker(hours_back=1, limit=5)
-        stored_count = await worker.run_single_fetch(use_stub=True)
+        
+        # Mock RSS with test articles
+        async def mock_rss():
+            from datetime import UTC, datetime
+            return [
+                {"title": "Test 1", "source": "Test", "url": "https://test.com/cnt1", "raw_text": "Content", "published_at": datetime.now(UTC)},
+                {"title": "Test 2", "source": "Test", "url": "https://test.com/cnt2", "raw_text": "Content", "published_at": datetime.now(UTC)},
+            ]
+        worker.fetch_rss_articles = mock_rss
+        stored_count = await worker.run_single_fetch(run_llm=False)
 
         # Verify articles were stored
         assert stored_count > 0
-        assert stored_count == 2  # Stubbed mode returns 2 articles
+        assert stored_count == 2
 
     def test_api_articles_endpoint_works(self, test_client, temp_db):
         """Test that API articles endpoint responds correctly"""
@@ -177,12 +200,12 @@ class TestWorkerIntegration:
         async def mock_fetch_error():
             raise Exception("Simulated fetch error")
 
-        monkeypatch.setattr(worker, "fetch_stubbed_articles", mock_fetch_error)
+        monkeypatch.setattr(worker, "fetch_rss_articles", mock_fetch_error)
 
         # Worker will raise exception since run_single_fetch doesn't catch it
         # This is expected behavior - the scheduler handles retry logic
         with pytest.raises(Exception, match="Simulated fetch error"):
-            await worker.run_single_fetch(use_stub=True)
+            await worker.run_single_fetch(run_llm=False)
 
     @pytest.mark.asyncio
     async def test_worker_config_from_env(self, temp_db, monkeypatch):
@@ -218,14 +241,17 @@ class TestWorkerIntegration:
 
         worker = NewsWorker(hours_back=1, limit=5)
 
-        # Store some articles first
-        asyncio.run(worker.run_single_fetch(use_stub=True))
+        # Mock and store some articles first
+        async def mock_rss():
+            from datetime import UTC, datetime
+            return [{"title": "Test", "source": "Test", "url": "https://test.com/status1", "raw_text": "Content", "published_at": datetime.now(UTC)}]
+        worker.fetch_rss_articles = mock_rss
+        asyncio.run(worker.run_single_fetch(run_llm=False))
 
         # Show status (captures logs)
         worker.show_status()
 
         # Status should complete without errors
-        # (actual log output verification would require log capture)
         assert True
 
 
@@ -275,15 +301,21 @@ class TestWorkerFetchModes:
     """Test different worker fetch modes"""
 
     @pytest.mark.asyncio
-    async def test_worker_stubbed_mode(self, tmp_path):
-        """Test worker with stubbed articles"""
+    async def test_worker_basic_fetch(self, tmp_path):
+        """Test worker with mocked RSS articles"""
         db_path = tmp_path / "test.db"
         os.environ["DB_PATH"] = str(db_path)
 
         worker = NewsWorker(hours_back=1, limit=5)
-        count = await worker.run_single_fetch(use_stub=True)
+        
+        # Mock RSS fetch
+        async def mock_rss():
+            from datetime import UTC, datetime
+            return [{"title": "Test", "source": "Test", "url": "https://test.com/basic1", "raw_text": "Content", "published_at": datetime.now(UTC)}]
+        worker.fetch_rss_articles = mock_rss
+        count = await worker.run_single_fetch(run_llm=False)
 
-        assert count > 0, "Stubbed mode should return articles"
+        assert count > 0, "Should return articles"
 
     @pytest.mark.asyncio
     async def test_worker_cnn_mode_without_network(self, tmp_path):

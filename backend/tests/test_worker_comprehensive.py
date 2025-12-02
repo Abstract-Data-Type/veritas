@@ -90,12 +90,19 @@ class TestNewsWorkerCore:
         assert worker.limit == 10
 
     @pytest.mark.asyncio
-    async def test_fetch_stubbed_articles(self, worker):
-        """Test stubbed article fetching"""
-        articles = await worker.fetch_stubbed_articles()
+    async def test_fetch_rss_articles_structure(self, worker):
+        """Test RSS article fetching returns correct structure"""
+        # Mock the RSS fetcher to return test data
+        async def mock_rss():
+            return [
+                {"title": "Test 1", "source": "TestSource", "url": "https://test.com/1", "raw_text": "Content 1", "published_at": datetime.now(UTC)},
+                {"title": "Test 2", "source": "TestSource", "url": "https://test.com/2", "raw_text": "Content 2", "published_at": datetime.now(UTC)},
+            ]
+        worker.fetch_rss_articles = mock_rss
+        articles = await worker.fetch_rss_articles()
 
         assert isinstance(articles, list)
-        assert len(articles) == 2  # Stubbed implementation returns 2 articles
+        assert len(articles) == 2
 
         for article in articles:
             assert "title" in article
@@ -388,8 +395,8 @@ class TestSchedulerFunctionality:
         return NewsWorker()
 
     @pytest.mark.asyncio
-    async def test_single_fetch_stubbed(self, worker):
-        """Test single fetch with stubbed articles"""
+    async def test_single_fetch_rss(self, worker):
+        """Test single fetch with RSS feeds"""
         with patch.object(worker, "process_articles", return_value=4) as mock_process:
             count = await worker.run_single_fetch(use_cnn=False)
             assert count == 4

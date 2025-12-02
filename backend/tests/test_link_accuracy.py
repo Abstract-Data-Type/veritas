@@ -131,63 +131,6 @@ class TestURLValidation:
         assert is_valid_url(good_url), "Single slash in path should be valid"
 
 
-class TestStubbedArticleURLs:
-    """Test URL accuracy in stubbed article fetching"""
-
-    @pytest.fixture
-    def worker(self):
-        """Create NewsWorker instance"""
-        return NewsWorker()
-
-    @pytest.mark.asyncio
-    async def test_stubbed_articles_have_valid_urls(self, worker):
-        """Test that stubbed articles have valid URL format"""
-        articles = await worker.fetch_stubbed_articles()
-
-        assert len(articles) > 0, "Should return at least one article"
-
-        for i, article in enumerate(articles):
-            url = article.get("url", "")
-
-            # Check URL exists and is non-empty
-            assert url, f"Article {i} has empty URL"
-
-            # Check URL is valid format
-            assert is_valid_url(url), f"Article {i} has invalid URL: {url}"
-
-            # Check URL doesn't have double slashes (common bug)
-            assert "//" not in url.replace("://", ":"), \
-                f"Article {i} URL has double slash: {url}"
-
-    @pytest.mark.asyncio
-    async def test_stubbed_articles_have_unique_urls(self, worker):
-        """Test that stubbed articles have unique URLs"""
-        articles = await worker.fetch_stubbed_articles()
-
-        urls = [article["url"] for article in articles]
-        unique_urls = set(urls)
-
-        # Each article should have a unique URL
-        assert len(urls) == len(unique_urls), \
-            f"Found duplicate URLs: {[u for u in urls if urls.count(u) > 1]}"
-
-    @pytest.mark.asyncio
-    async def test_stubbed_url_contains_source_domain(self, worker):
-        """Test that stubbed URLs contain appropriate source domains"""
-        articles = await worker.fetch_stubbed_articles()
-
-        for article in articles:
-            url = article["url"]
-            article["source"].lower()
-
-            parsed = urlparse(url)
-            domain = parsed.netloc.lower()
-
-            # The domain should relate to the source name
-            # This is a basic sanity check
-            assert domain, f"URL {url} has no domain"
-
-
 class TestURLStorageAndRetrieval:
     """Test that URLs are stored and retrieved accurately from database"""
 
@@ -593,16 +536,20 @@ class TestEndToEndURLFlow:
         return NewsWorker()
 
     @pytest.mark.asyncio
-    async def test_stubbed_fetch_store_retrieve_url_integrity(self, temp_db, worker):
-        """Test complete flow: fetch stubbed articles, store, retrieve - URLs should match"""
+    async def test_fetch_store_retrieve_url_integrity(self, temp_db, worker):
+        """Test complete flow: fetch articles, store, retrieve - URLs should match"""
         from veritas_news.db.init_db import get_connection
+        from datetime import UTC, datetime
 
-        # Fetch articles
-        articles = await worker.fetch_stubbed_articles()
-        original_urls = {a["url"] for a in articles}
+        # Mock RSS articles with test data
+        test_articles = [
+            {"title": "Test 1", "source": "Test", "url": "https://example.com/article1", "raw_text": "Content", "published_at": datetime.now(UTC)},
+            {"title": "Test 2", "source": "Test", "url": "https://example.com/article2", "raw_text": "Content", "published_at": datetime.now(UTC)},
+        ]
+        original_urls = {a["url"] for a in test_articles}
 
         # Store articles - process_articles is now async
-        stored_count = await worker.process_articles(articles)
+        stored_count = await worker.process_articles(test_articles, run_llm=False)
         assert stored_count > 0, "Should have stored at least one article"
 
         # Retrieve and verify URLs
@@ -887,65 +834,6 @@ class TestURLIssuesDiagnosis:
     """
     Tests to diagnose common URL issues that cause links to not work.
     """
-
-    @pytest.fixture
-    def worker(self):
-        """Create NewsWorker instance"""
-        return NewsWorker()
-
-    @pytest.mark.asyncio
-    async def test_urls_do_not_have_html_entities(self, worker):
-        """Test that URLs don't contain HTML entities like &amp;"""
-        articles = await worker.fetch_stubbed_articles()
-
-        html_entities = ['&amp;', '&lt;', '&gt;', '&quot;', '&#']
-
-        for article in articles:
-            url = article["url"]
-            for entity in html_entities:
-                assert entity not in url, \
-                    f"URL contains HTML entity '{entity}': {url}"
-
-    @pytest.mark.asyncio
-    async def test_urls_do_not_have_newlines(self, worker):
-        """Test that URLs don't contain newlines or carriage returns"""
-        articles = await worker.fetch_stubbed_articles()
-
-        for article in articles:
-            url = article["url"]
-            assert '\n' not in url, f"URL contains newline: {repr(url)}"
-            assert '\r' not in url, f"URL contains carriage return: {repr(url)}"
-
-    @pytest.mark.asyncio
-    async def test_urls_are_absolute_not_relative(self, worker):
-        """Test that URLs are absolute (start with http:// or https://)"""
-        articles = await worker.fetch_stubbed_articles()
-
-        for article in articles:
-            url = article["url"]
-            assert url.startswith(('http://', 'https://')), \
-                f"URL is not absolute: {url}"
-
-    @pytest.mark.asyncio
-    async def test_urls_do_not_have_spaces(self, worker):
-        """Test that URLs don't contain unencoded spaces"""
-        articles = await worker.fetch_stubbed_articles()
-
-        for article in articles:
-            url = article["url"]
-            # Spaces should be encoded as %20
-            assert ' ' not in url, f"URL contains unencoded space: {url}"
-
-    @pytest.mark.asyncio
-    async def test_urls_have_proper_scheme(self, worker):
-        """Test that URLs use http or https scheme"""
-        articles = await worker.fetch_stubbed_articles()
-
-        for article in articles:
-            url = article["url"]
-            parsed = urlparse(url)
-            assert parsed.scheme in ('http', 'https'), \
-                f"URL has invalid scheme '{parsed.scheme}': {url}"
 
     def test_url_join_helper_prevents_double_slashes(self):
         """Test a helper function that safely joins URL parts"""

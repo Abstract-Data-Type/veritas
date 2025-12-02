@@ -247,9 +247,16 @@ class TestRefreshCycleIntegration:
             initial_count = db.query(Article).count()
             assert initial_count == 0
 
-            # Run fetch with stub articles (no LLM for speed)
+            # Run fetch with mocked RSS articles (no LLM for speed)
             worker = NewsWorker(limit=2)
-            count = await worker.run_single_fetch(use_stub=True, run_llm=False)
+            # Mock RSS to return test articles
+            async def mock_rss():
+                return [
+                    {"title": "Test 1", "source": "Test", "url": "https://test.com/1", "raw_text": "Content", "published_at": datetime.now(UTC)},
+                    {"title": "Test 2", "source": "Test", "url": "https://test.com/2", "raw_text": "Content", "published_at": datetime.now(UTC)},
+                ]
+            worker.fetch_rss_articles = mock_rss
+            count = await worker.run_single_fetch(run_llm=False)
 
             db.expire_all()
             final_count = db.query(Article).count()
@@ -280,8 +287,14 @@ class TestRefreshCycleIntegration:
             after_clear_count = db.query(Article).count()
             assert after_clear_count == 0
 
-            # Step 2: Fetch new articles
-            count = await worker.run_single_fetch(use_stub=True, run_llm=False)
+            # Step 2: Fetch new articles (mock RSS)
+            async def mock_rss():
+                return [
+                    {"title": "New 1", "source": "Test", "url": "https://test.com/new1", "raw_text": "Content", "published_at": datetime.now(UTC)},
+                    {"title": "New 2", "source": "Test", "url": "https://test.com/new2", "raw_text": "Content", "published_at": datetime.now(UTC)},
+                ]
+            worker.fetch_rss_articles = mock_rss
+            count = await worker.run_single_fetch(run_llm=False)
 
             db.expire_all()
             after_fetch_count = db.query(Article).count()
@@ -307,7 +320,10 @@ class TestRefreshCycleIntegration:
 
             # Simulate fetch completion
             worker = NewsWorker(limit=1)
-            await worker.run_single_fetch(use_stub=True, run_llm=False)
+            async def mock_rss():
+                return [{"title": "Test", "source": "Test", "url": "https://test.com/m1", "raw_text": "Content", "published_at": datetime.now(UTC)}]
+            worker.fetch_rss_articles = mock_rss
+            await worker.run_single_fetch(run_llm=False)
 
             maintenance_state["is_running"] = False
             maintenance_state["last_completed"] = datetime.now(UTC).isoformat()
@@ -431,8 +447,14 @@ class TestManualRefreshTrigger:
             db.expire_all()
             assert db.query(Article).count() == 0
 
-            # ===== PHASE 3: Fetch new articles =====
-            count = await worker.run_single_fetch(use_stub=True, run_llm=False)
+            # ===== PHASE 3: Fetch new articles (mocked RSS) =====
+            async def mock_rss():
+                return [
+                    {"title": "Article 1", "source": "Test", "url": "https://test.com/a1", "raw_text": "Content", "published_at": datetime.now(UTC)},
+                    {"title": "Article 2", "source": "Test", "url": "https://test.com/a2", "raw_text": "Content", "published_at": datetime.now(UTC)},
+                ]
+            worker.fetch_rss_articles = mock_rss
+            count = await worker.run_single_fetch(run_llm=False)
             assert count > 0
 
             db.expire_all()

@@ -41,35 +41,6 @@ class NewsWorker:
         self.hours_back = hours_back
         self.limit = limit
 
-    async def fetch_stubbed_articles(self) -> list[dict]:
-        """Fetch articles from all stubbed sources - DEPRECATED, use fetch_rss_articles instead"""
-        logger.warning("Using deprecated stubbed articles - these URLs are not real!")
-        logger.info("Fetching articles from stubbed sources")
-
-        # Simulate fetch delay
-        await asyncio.sleep(0.5)
-
-        # Return stubbed articles - NOTE: These URLs are fake and for testing only
-        articles = [
-            {
-                "title": "Breaking: Tech Giant Announces New AI Initiative",
-                "source": "TechNews (Stub)",
-                "url": f"https://example.com/stub/ai-initiative-{datetime.now().timestamp()}",
-                "raw_text": "Tech giant revealed plans for new AI initiative...",
-                "published_at": datetime.now(UTC),
-            },
-            {
-                "title": "Global Climate Summit Reaches Historic Agreement",
-                "source": "WorldNews (Stub)",
-                "url": f"https://example.com/stub/climate-summit-{datetime.now().timestamp()}",
-                "raw_text": "World leaders reached historic agreement on carbon reduction...",
-                "published_at": datetime.now(UTC),
-            },
-        ]
-
-        logger.info(f"Fetched {len(articles)} stubbed articles")
-        return articles
-
     async def fetch_rss_articles(self) -> list[dict]:
         """Fetch articles from configured RSS feeds"""
         from .config import WorkerConfig
@@ -574,7 +545,7 @@ class NewsWorker:
         return summary_count, bias_count
 
     async def run_single_fetch(
-        self, use_cnn: bool = False, use_newsapi: bool = False, use_stub: bool = False, run_llm: bool = True
+        self, use_cnn: bool = False, use_newsapi: bool = False, run_llm: bool = True
     ) -> int:
         """Run one fetch cycle"""
         if use_newsapi:
@@ -583,9 +554,6 @@ class NewsWorker:
         elif use_cnn:
             logger.info("Running single fetch with CNN scraper")
             articles = await self.fetch_cnn_articles()
-        elif use_stub:
-            logger.info("Running single fetch with stubbed articles (testing only)")
-            articles = await self.fetch_stubbed_articles()
         else:
             logger.info("Running single fetch with RSS feeds")
             articles = await self.fetch_rss_articles()

@@ -1,6 +1,7 @@
 import { fetchArticles, fetchStatus } from "@/lib/api/client";
-import { Article, StatusResponse } from "@/lib/api/types";
+import { Article } from "@/lib/api/types";
 import { ArticleCard, ArticleCardSkeleton } from "./components/ArticleCard";
+import { MaintenanceDisplay } from "./components/MaintenanceDisplay";
 import { Suspense } from "react";
 import { layout, typography, legend, error, cn } from "@/lib/theme";
 
@@ -41,30 +42,6 @@ function ErrorDisplay({ message }: { message: string }) {
         <code className={error.code}>
           {process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"}
         </code>
-      </p>
-    </div>
-  );
-}
-
-function MaintenanceDisplay() {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 px-6">
-      <div className="relative mb-8">
-        {/* Animated spinner */}
-        <div className="w-20 h-20 border-4 border-gray-200 border-t-crimson rounded-full animate-spin" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-2xl">🔬</span>
-        </div>
-      </div>
-      <h2 className="text-2xl font-bold text-gray-800 mb-3">
-        Analysis in Progress
-      </h2>
-      <p className="text-gray-600 text-center max-w-md mb-4">
-        We&apos;re fetching fresh articles and running our AI bias analysis.
-        This typically takes a few minutes.
-      </p>
-      <p className="text-sm text-gray-500">
-        Please check back soon!
       </p>
     </div>
   );

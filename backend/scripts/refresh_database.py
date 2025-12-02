@@ -49,7 +49,7 @@ from loguru import logger
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from veritas_news.ai import rate_bias, rate_secm
+from veritas_news.ai import rate_bias
 from veritas_news.db.sqlalchemy import Base, SessionLocal, engine
 from veritas_news.models.bias_rating import normalize_score_to_range
 from veritas_news.models.sqlalchemy_models import Article, BiasRating, Summary
@@ -148,7 +148,7 @@ class DatabaseRefresher:
             # Find articles without bias ratings
             articles_without_ratings = db.query(Article).outerjoin(
                 BiasRating, Article.article_id == BiasRating.article_id
-            ).filter(BiasRating.rating_id.is_(None)).all()
+            ).filter(BiasRating.rating_id is None).all()
 
             if not articles_without_ratings:
                 logger.info("All articles have bias ratings")
@@ -164,8 +164,6 @@ class DatabaseRefresher:
 
                 try:
                     logger.info(f"Analyzing: {article.title[:50]}...")
-                    
-                    # Run legacy 4-dimension bias analysis
                     bias_result = await rate_bias(article.raw_text)
 
                     scores = bias_result.get("scores", {})
@@ -181,21 +179,6 @@ class DatabaseRefresher:
                     else:
                         overall_bias_score = None
 
-                    # Run SECM analysis (22 parallel LLM calls)
-                    try:
-                        secm_result = await rate_secm(article.raw_text)
-                        secm_ideological = secm_result.get("ideological_score")
-                        secm_epistemic = secm_result.get("epistemic_score")
-                        secm_variables = secm_result.get("variables", {})
-                        secm_reasoning = secm_result.get("reasoning", {})
-                    except Exception as e:
-                        logger.warning(f"SECM analysis failed: {e}")
-                        secm_ideological = None
-                        secm_epistemic = None
-                        secm_variables = {}
-                        secm_reasoning = {}
-
-                    import json
                     new_rating = BiasRating(
                         article_id=article.article_id,
                         bias_score=overall_bias_score,
@@ -205,40 +188,13 @@ class DatabaseRefresher:
                         sourcing_bias=sourcing_bias,
                         reasoning=None,
                         evaluated_at=datetime.now(UTC),
-                        # SECM fields
-                        secm_ideological_score=secm_ideological,
-                        secm_epistemic_score=secm_epistemic,
-                        secm_ideol_l1_systemic_naming=secm_variables.get("secm_ideol_l1_systemic_naming"),
-                        secm_ideol_l2_power_gap_lexicon=secm_variables.get("secm_ideol_l2_power_gap_lexicon"),
-                        secm_ideol_l3_elite_culpability=secm_variables.get("secm_ideol_l3_elite_culpability"),
-                        secm_ideol_l4_resource_redistribution=secm_variables.get("secm_ideol_l4_resource_redistribution"),
-                        secm_ideol_l5_change_as_justice=secm_variables.get("secm_ideol_l5_change_as_justice"),
-                        secm_ideol_l6_care_harm=secm_variables.get("secm_ideol_l6_care_harm"),
-                        secm_ideol_r1_agentic_culpability=secm_variables.get("secm_ideol_r1_agentic_culpability"),
-                        secm_ideol_r2_order_lexicon=secm_variables.get("secm_ideol_r2_order_lexicon"),
-                        secm_ideol_r3_institutional_defense=secm_variables.get("secm_ideol_r3_institutional_defense"),
-                        secm_ideol_r4_meritocratic_defense=secm_variables.get("secm_ideol_r4_meritocratic_defense"),
-                        secm_ideol_r5_change_as_threat=secm_variables.get("secm_ideol_r5_change_as_threat"),
-                        secm_ideol_r6_sanctity_degradation=secm_variables.get("secm_ideol_r6_sanctity_degradation"),
-                        secm_epist_h1_primary_documentation=secm_variables.get("secm_epist_h1_primary_documentation"),
-                        secm_epist_h2_adversarial_sourcing=secm_variables.get("secm_epist_h2_adversarial_sourcing"),
-                        secm_epist_h3_specific_attribution=secm_variables.get("secm_epist_h3_specific_attribution"),
-                        secm_epist_h4_data_contextualization=secm_variables.get("secm_epist_h4_data_contextualization"),
-                        secm_epist_h5_methodological_transparency=secm_variables.get("secm_epist_h5_methodological_transparency"),
-                        secm_epist_e1_emotive_adjectives=secm_variables.get("secm_epist_e1_emotive_adjectives"),
-                        secm_epist_e2_labeling_othering=secm_variables.get("secm_epist_e2_labeling_othering"),
-                        secm_epist_e3_causal_certainty=secm_variables.get("secm_epist_e3_causal_certainty"),
-                        secm_epist_e4_imperative_direct_address=secm_variables.get("secm_epist_e4_imperative_direct_address"),
-                        secm_epist_e5_motivated_reasoning=secm_variables.get("secm_epist_e5_motivated_reasoning"),
-                        secm_reasoning_json=json.dumps(secm_reasoning) if secm_reasoning else None,
                     )
 
                     db.add(new_rating)
                     db.commit()
 
                     analyzed_count += 1
-                    secm_str = f", SECM ideo={secm_ideological:+.2f}" if secm_ideological else ""
-                    logger.info(f"  → Bias score: {overall_bias_score:.2f}{secm_str}" if overall_bias_score else "  → No score")
+                    logger.info(f"  → Bias score: {overall_bias_score:.2f}" if overall_bias_score else "  → No score")
 
                 except Exception as e:
                     logger.error(f"Error analyzing article {article.article_id}: {e}")
@@ -246,28 +202,6 @@ class DatabaseRefresher:
 
             return analyzed_count
 
-        finally:
-            db.close()
-
-    def clear_all_ratings(self) -> int:
-        """
-        Delete all bias ratings to force re-analysis.
-
-        Returns:
-            int: Number of ratings deleted
-        """
-        logger.info("Clearing all existing bias ratings...")
-
-        db = self.get_session()
-        try:
-            deleted_count = db.query(BiasRating).delete()
-            db.commit()
-            logger.info(f"Deleted {deleted_count} bias ratings")
-            return deleted_count
-        except Exception as e:
-            logger.error(f"Error clearing ratings: {e}")
-            db.rollback()
-            return 0
         finally:
             db.close()
 
@@ -456,8 +390,6 @@ Examples:
                         help="Fetch new articles from RSS feeds")
     parser.add_argument("--analyze", action="store_true",
                         help="Analyze bias for articles without ratings")
-    parser.add_argument("--reanalyze", action="store_true",
-                        help="Clear all ratings and re-analyze ALL articles")
     parser.add_argument("--cleanup", action="store_true",
                         help="Remove old articles")
     parser.add_argument("--full", action="store_true",
@@ -479,7 +411,7 @@ Examples:
     args = parser.parse_args()
 
     # Check if no action specified
-    if not any([args.init, args.fetch, args.analyze, args.reanalyze, args.cleanup,
+    if not any([args.init, args.fetch, args.analyze, args.cleanup,
                 args.full, args.status, args.verify]):
         parser.print_help()
         return
@@ -506,10 +438,7 @@ Examples:
     if args.fetch:
         await refresher.fetch_articles(limit=args.limit)
 
-    if args.reanalyze:
-        refresher.clear_all_ratings()
-        await refresher.analyze_missing_bias()
-    elif args.analyze:
+    if args.analyze:
         await refresher.analyze_missing_bias()
 
     if args.cleanup:

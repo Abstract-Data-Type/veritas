@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { fetchArticleById, summarizeArticle, formatDate, formatBiasScore, formatIdeologicalScore, formatEvidenceScore } from "@/lib/api/client";
 import { getPoliticalLeaning, getLeaningLabel } from "@/lib/api/types";
 import { layout, typography, button, badge, getLeaningTheme, cn } from "@/lib/theme";
+import { MethodologyModal } from "@/app/components/MethodologyModal";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -97,7 +98,10 @@ export default async function ArticleDetailPage({ params }: PageProps) {
         {/* Bias details */}
         {article.bias_rating && (
           <div className="border-b border-gray-200 px-6 py-4">
-            <h2 className={cn(typography.h2, "mb-3")}>Bias Analysis</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className={typography.h2}>Structural-Epistemic Analysis</h2>
+              <MethodologyModal />
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               {/* OLD: Legacy visual bias meter - commented out in favor of SECM
               <div className="col-span-2">
@@ -118,18 +122,18 @@ export default async function ArticleDetailPage({ params }: PageProps) {
               </div>
               */}
 
-              {/* NEW: Ideological Score (Beta) */}
+              {/* NEW: Ideological Spectrum (Beta) */}
               {article.bias_rating.secm_ideological_score !== null && 
                article.bias_rating.secm_ideological_score !== undefined && (
                 <div className="col-span-2 mt-2 p-4 rounded-lg bg-amber-50 border border-amber-200">
                   <div className="flex items-center gap-2 mb-2">
-                    <h3 className="font-semibold text-amber-900">Ideological Score</h3>
+                    <h3 className="font-semibold text-amber-900">Ideological Spectrum</h3>
                     <span className="text-xs font-medium px-2 py-0.5 bg-amber-200 text-amber-800 rounded-full">
                       BETA
                     </span>
                   </div>
                   <p className="text-xs text-amber-700 mb-3">
-                    New 22-question analysis based on Structural-Epistemic Coding Matrix (SECM)
+                    Detects how the text assigns blame: failures of systems/structures (Left) vs failures of individuals/choices (Right)
                   </p>
                   <div className="flex justify-between text-xs text-amber-700 mb-4">
                     <span>Left (-1.0)</span>
@@ -156,18 +160,18 @@ export default async function ArticleDetailPage({ params }: PageProps) {
                 </div>
               )}
 
-              {/* NEW: Evidence Rating (Epistemic Score - Beta) */}
+              {/* NEW: Epistemic Integrity (Beta) */}
               {article.bias_rating.secm_epistemic_score !== null && 
                article.bias_rating.secm_epistemic_score !== undefined && (
                 <div className="col-span-2 mt-2 p-4 rounded-lg bg-emerald-50 border border-emerald-200">
                   <div className="flex items-center gap-2 mb-2">
-                    <h3 className="font-semibold text-emerald-900">Evidence Rating</h3>
+                    <h3 className="font-semibold text-emerald-900">Epistemic Integrity</h3>
                     <span className="text-xs font-medium px-2 py-0.5 bg-emerald-200 text-emerald-800 rounded-full">
                       BETA
                     </span>
                   </div>
                   <p className="text-xs text-emerald-700 mb-3">
-                    Measures journalistic integrity: source attribution, documentation, vs. emotive language
+                    Audits information quality: source citation and evidence (High) vs emotional language and unsubstantiated claims (Low)
                   </p>
                   <div className="flex justify-between text-xs text-emerald-700 mb-4">
                     <span>Poor (-1.0)</span>

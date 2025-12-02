@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Article, getPoliticalLeaning, getLeaningLabel } from "@/lib/api/types";
 import { formatDate, formatBiasScore, formatIdeologicalScore, formatEvidenceScore } from "@/lib/api/client";
 import { getLeaningTheme, articleCard, badge, skeleton, cn } from "@/lib/theme";
+import { Tooltip, InfoIcon } from "./Tooltip";
+import { MethodologyModal } from "./MethodologyModal";
 
 interface ArticleCardProps {
   article: Article;
@@ -84,10 +86,16 @@ export function ArticleCard({ article }: ArticleCardProps) {
               <div className="pt-2">
                 <div className="flex items-center justify-between mb-2">
                   <span className={cn(articleCard.biasLabel, "flex items-center gap-1")}>
-                    Ideological Score
-                    <span className="text-[10px] font-medium px-1 py-0.5 bg-amber-100 text-amber-700 rounded">
-                      BETA
-                    </span>
+                    Ideological Spectrum
+                    <Tooltip content={
+                      <div className="text-left">
+                        <p className="font-semibold mb-1">Ideological Spectrum</p>
+                        <p className="mb-2">Detects <strong>how the text assigns blame</strong>. Does the author frame problems as failures of <span className="text-blue-300">systems and structures (Left)</span> or failures of <span className="text-red-300">individuals and choices (Right)</span>?</p>
+                        <p className="text-gray-400 text-[10px]">12 binary variables · Bayesian smoothing (K=4)</p>
+                      </div>
+                    }>
+                      <InfoIcon />
+                    </Tooltip>
                   </span>
                   <span className={cn("font-semibold", getIdeologicalColorClass(article.bias_rating.secm_ideological_score))}>
                     {formatIdeologicalScore(article.bias_rating.secm_ideological_score)}
@@ -112,10 +120,16 @@ export function ArticleCard({ article }: ArticleCardProps) {
               <div className="mt-3 pt-2 border-t border-gray-100">
                 <div className="flex items-center justify-between mb-2">
                   <span className={cn(articleCard.biasLabel, "flex items-center gap-1")}>
-                    Evidence Rating
-                    <span className="text-[10px] font-medium px-1 py-0.5 bg-emerald-100 text-emerald-700 rounded">
-                      BETA
-                    </span>
+                    Epistemic Integrity
+                    <Tooltip content={
+                      <div className="text-left">
+                        <p className="font-semibold mb-1">Epistemic Integrity</p>
+                        <p className="mb-2">Audits <strong>information quality</strong>. Does the text cite sources and provide evidence (<span className="text-emerald-300">High Integrity</span>), or rely on emotional language and unsubstantiated claims (<span className="text-red-300">Low Integrity</span>)?</p>
+                        <p className="text-gray-400 text-[10px]">10 binary variables · Bayesian smoothing (K=4)</p>
+                      </div>
+                    }>
+                      <InfoIcon />
+                    </Tooltip>
                   </span>
                   <span className={cn("font-semibold", getEvidenceColorClass(article.bias_rating.secm_epistemic_score))}>
                     {formatEvidenceScore(article.bias_rating.secm_epistemic_score)}
@@ -131,6 +145,14 @@ export function ArticleCard({ article }: ArticleCardProps) {
                     }}
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Methodology Link */}
+            {(article.bias_rating.secm_ideological_score !== null || 
+              article.bias_rating.secm_epistemic_score !== null) && (
+              <div className="mt-3 pt-2 border-t border-gray-100 text-center">
+                <MethodologyModal />
               </div>
             )}
           </div>

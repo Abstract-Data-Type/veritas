@@ -182,6 +182,8 @@ All work is tracked in Linear. Commit messages must include the Linear ticket ID
 - Verify the key is valid at https://aistudio.google.com/app/apikey
 - The AI library (`src/ai/`) requires this key for summarization and bias analysis
 
+
+
 ### Database errors
 - Delete `veritas_news.db` to reset
 - Database will be recreated on next run

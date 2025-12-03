@@ -52,6 +52,27 @@ async def lifespan(app: FastAPI):
     else:
         logger.error("❌ Database initialization failed")
 
+    # Check and backfill incomplete data if enabled
+    auto_backfill = os.getenv("AUTO_BACKFILL_ON_STARTUP", "true").lower() == "true"
+    if auto_backfill:
+        logger.info("🔍 Checking data completeness...")
+        max_backfill = int(os.getenv("MAX_BACKFILL_ARTICLES", "20"))
+        
+        try:
+            # Create temporary worker for backfill
+            from .worker.news_worker import NewsWorker
+            temp_worker = NewsWorker()
+            summary_count, bias_count = await temp_worker.backfill_missing_analysis(limit=max_backfill)
+            
+            if summary_count > 0 or bias_count > 0:
+                logger.info(f"✅ Backfilled {summary_count} summaries and {bias_count} bias ratings")
+            else:
+                logger.info("✅ All articles have complete data")
+        except Exception as e:
+            logger.warning(f"⚠️ Backfill failed: {e}")
+    else:
+        logger.debug("⏸️ Startup backfill disabled")
+
     # Start background worker if enabled
     worker_enabled = os.getenv("WORKER_ENABLED", "true").lower() == "true"
     if worker_enabled:

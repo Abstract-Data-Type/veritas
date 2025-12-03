@@ -184,10 +184,27 @@ async def call_llm_for_dimension(
             last_error = e
             if attempt < max_retries - 1:
                 import logging
-                logging.getLogger(__name__).warning(
-                    f"Dimension '{dim_name}' attempt {attempt + 1}/{max_retries} failed: {e}. Retrying..."
+                import os
+                
+                # Check if this is a 503 overload error
+                is_503_overload = (
+                    "503" in str(e) and 
+                    ("overloaded" in str(e).lower() or "unavailable" in str(e).lower())
                 )
-                await asyncio.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                
+                if is_503_overload:
+                    # Use longer delay for 503 overload errors
+                    delay = float(os.getenv("GEMINI_503_RETRY_DELAY", "5"))
+                    logging.getLogger(__name__).warning(
+                        f"Dimension '{dim_name}' attempt {attempt + 1}/{max_retries} failed: 503 overload. Waiting {delay}s before retry..."
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    # Standard exponential backoff for other errors
+                    logging.getLogger(__name__).warning(
+                        f"Dimension '{dim_name}' attempt {attempt + 1}/{max_retries} failed: {e}. Retrying..."
+                    )
+                    await asyncio.sleep(retry_delay * (attempt + 1))
 
     raise last_error or RuntimeError(f"Dimension '{dim_name}' failed with no error details")
 

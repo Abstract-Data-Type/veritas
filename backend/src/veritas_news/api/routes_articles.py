@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from ..db.sqlalchemy import get_session
-from ..models.sqlalchemy_models import Article, BiasRating
+from ..models.sqlalchemy_models import Article, BiasRating, Summary
 
 router = APIRouter()
 
@@ -92,13 +92,16 @@ async def get_latest_articles(
     max_bias_score: float | None = Query(
         default=None, ge=-1.0, le=1.0, description="Maximum bias score"
     ),
+    include_incomplete: bool = Query(
+        default=False, description="Include articles without summary or bias rating"
+    ),
     db: Session = Depends(get_session),
 ):
     """
     Get the latest articles with their bias ratings.
 
     This endpoint is used by the UI to display recent articles.
-    Articles are returned with their associated bias ratings if available.
+    By default, only returns complete articles (with summary AND bias rating).
 
     Args:
         limit: Maximum number of articles to return (1-100, default 20)
@@ -107,14 +110,26 @@ async def get_latest_articles(
         end_date: Filter articles published before this date (optional)
         min_bias_score: Minimum bias score to include (optional, -1.0 to 1.0)
         max_bias_score: Maximum bias score to include (optional, -1.0 to 1.0)
+        include_incomplete: Include articles without summary or bias rating (default False)
 
     Returns:
         List of articles with bias ratings and total count
     """
-    # Start building query with left join to bias_ratings
-    query = db.query(Article).outerjoin(
-        BiasRating, Article.article_id == BiasRating.article_id
-    )
+    # Start building query with joins to ensure completeness
+    if include_incomplete:
+        # Include all articles (original behavior)
+        query = db.query(Article).outerjoin(
+            BiasRating, Article.article_id == BiasRating.article_id
+        ).outerjoin(
+            Summary, Article.article_id == Summary.article_id
+        )
+    else:
+        # Only complete articles (default behavior for production stability)
+        query = db.query(Article).join(
+            BiasRating, Article.article_id == BiasRating.article_id
+        ).join(
+            Summary, Article.article_id == Summary.article_id
+        )
 
     # Apply date filters
     if start_date:

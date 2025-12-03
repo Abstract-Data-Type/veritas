@@ -295,165 +295,187 @@ class NewsWorker:
             return None
 
     def generate_article_summary(self, db: Session, article_id: int, raw_text: str) -> bool:
-        """Generate and store a summary for an article"""
-        try:
-            if not raw_text or len(raw_text.strip()) < 50:
-                logger.debug(f"Article {article_id} text too short for summarization")
-                return False
-
-            logger.info(f"🔄 Generating summary for article {article_id}")
-            
-            summary_text = summarize_with_gemini(raw_text)
-            
-            if not summary_text:
-                logger.warning(f"Empty summary returned for article {article_id}")
-                return False
-
-            new_summary = Summary(
-                article_id=article_id,
-                summary_text=summary_text,
-            )
-            db.add(new_summary)
-            db.commit()
-
-            logger.info(f"✅ Summary generated for article {article_id}: {summary_text[:80]}...")
-            return True
-
-        except Exception as e:
-            logger.error(f"❌ Error generating summary for article {article_id}: {e}")
-            db.rollback()
+        """Generate and store a summary for an article with retry logic"""
+        if not raw_text or len(raw_text.strip()) < 50:
+            logger.debug(f"Article {article_id} text too short for summarization")
             return False
+
+        logger.info(f"🔄 Generating summary for article {article_id}")
+        
+        # Simple retry logic - 3 attempts
+        for attempt in range(3):
+            try:
+                summary_text = summarize_with_gemini(raw_text)
+                
+                if not summary_text:
+                    logger.warning(f"Empty summary returned for article {article_id} (attempt {attempt + 1})")
+                    continue
+
+                new_summary = Summary(
+                    article_id=article_id,
+                    summary_text=summary_text,
+                )
+                db.add(new_summary)
+                db.commit()
+
+                logger.info(f"✅ Summary generated for article {article_id}: {summary_text[:80]}...")
+                return True
+
+            except Exception as e:
+                logger.warning(f"❌ Summary attempt {attempt + 1} failed for article {article_id}: {e}")
+                db.rollback()
+                if attempt < 2:  # Don't sleep after last attempt
+                    import asyncio
+                    import time
+                    time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s
+
+        logger.error(f"❌ All summary attempts failed for article {article_id}")
+        return False
 
     async def analyze_article_bias(self, db: Session, article_id: int, raw_text: str) -> bool:
         """Analyze bias for an article and store the rating (legacy + SECM)"""
         import json
+        import os
         
-        try:
-            if not raw_text or len(raw_text.strip()) < 50:
-                logger.debug(f"Article {article_id} text too short for bias analysis")
-                return False
+        if not raw_text or len(raw_text.strip()) < 50:
+            logger.debug(f"Article {article_id} text too short for bias analysis")
+            return False
 
-            logger.info(f"🔄 Analyzing bias for article {article_id} (legacy + SECM)")
-            
-            # Legacy 4-dimension analysis
-            bias_result = await rate_bias(raw_text)
-
-            # Extract scores from result
-            scores = bias_result.get("scores", {})
-
-            # Extract individual dimension scores (on 1-7 scale)
-            partisan_bias = scores.get("partisan_bias")
-            affective_bias = scores.get("affective_bias")
-            framing_bias = scores.get("framing_bias")
-            sourcing_bias = scores.get("sourcing_bias")
-
-            # Calculate overall bias score as average of dimensions, then normalize to -1 to 1
-            valid_scores = [s for s in [partisan_bias, affective_bias, framing_bias, sourcing_bias] if s is not None]
-            if valid_scores:
-                avg_score = sum(valid_scores) / len(valid_scores)
-                overall_bias_score = normalize_score_to_range(avg_score)  # Convert 1-7 to -1 to 1
-            else:
-                overall_bias_score = None
-
-            # SECM analysis (22 parallel LLM calls with K=4 smoothing)
-            logger.info(f"🔄 Running SECM analysis for article {article_id} (22 LLM calls)")
+        logger.info(f"🔄 Analyzing bias for article {article_id}")
+        
+        # Retry logic for bias analysis
+        for attempt in range(3):
             try:
-                secm_result = await rate_secm(raw_text)
-                secm_ideological = secm_result.get("ideological_score")
-                secm_epistemic = secm_result.get("epistemic_score")
-                secm_variables = secm_result.get("variables", {})
-                secm_reasoning = secm_result.get("reasoning", {})
-                logger.info(f"✅ SECM analysis complete for article {article_id}: ideological={secm_ideological}, epistemic={secm_epistemic}")
-            except Exception as e:
-                logger.error(f"❌ SECM analysis failed for article {article_id}: {e}")
+                # Legacy 4-dimension analysis
+                bias_result = await rate_bias(raw_text)
+
+                # Extract scores from result
+                scores = bias_result.get("scores", {})
+
+                # Extract individual dimension scores (on 1-7 scale)
+                partisan_bias = scores.get("partisan_bias")
+                affective_bias = scores.get("affective_bias")
+                framing_bias = scores.get("framing_bias")
+                sourcing_bias = scores.get("sourcing_bias")
+
+                # Calculate overall bias score as average of dimensions, then normalize to -1 to 1
+                valid_scores = [s for s in [partisan_bias, affective_bias, framing_bias, sourcing_bias] if s is not None]
+                if valid_scores:
+                    avg_score = sum(valid_scores) / len(valid_scores)
+                    overall_bias_score = normalize_score_to_range(avg_score)  # Convert 1-7 to -1 to 1
+                else:
+                    overall_bias_score = None
+
+                # SECM analysis (22 parallel LLM calls with K=4 smoothing) - can be disabled
                 secm_ideological = None
                 secm_epistemic = None
                 secm_variables = {}
                 secm_reasoning = {}
+                
+                disable_secm = os.getenv("DISABLE_SECM_ANALYSIS", "false").lower() == "true"
+                if not disable_secm:
+                    logger.info(f"🔄 Running SECM analysis for article {article_id} (22 LLM calls)")
+                    try:
+                        secm_result = await rate_secm(raw_text)
+                        secm_ideological = secm_result.get("ideological_score")
+                        secm_epistemic = secm_result.get("epistemic_score")
+                        secm_variables = secm_result.get("variables", {})
+                        secm_reasoning = secm_result.get("reasoning", {})
+                        logger.info(f"✅ SECM analysis complete for article {article_id}: ideological={secm_ideological}, epistemic={secm_epistemic}")
+                    except Exception as e:
+                        logger.warning(f"❌ SECM analysis failed for article {article_id}: {e}")
+                else:
+                    logger.debug(f"⏸️ SECM analysis disabled for article {article_id}")
 
-            # Check if bias rating already exists (might need SECM update)
-            existing_rating = db.query(BiasRating).filter(BiasRating.article_id == article_id).first()
-            
-            if existing_rating:
-                # Update existing rating with SECM scores
-                existing_rating.secm_ideological_score = secm_ideological
-                existing_rating.secm_epistemic_score = secm_epistemic
-                existing_rating.secm_ideol_l1_systemic_naming = secm_variables.get("secm_ideol_l1_systemic_naming")
-                existing_rating.secm_ideol_l2_power_gap_lexicon = secm_variables.get("secm_ideol_l2_power_gap_lexicon")
-                existing_rating.secm_ideol_l3_elite_culpability = secm_variables.get("secm_ideol_l3_elite_culpability")
-                existing_rating.secm_ideol_l4_resource_redistribution = secm_variables.get("secm_ideol_l4_resource_redistribution")
-                existing_rating.secm_ideol_l5_change_as_justice = secm_variables.get("secm_ideol_l5_change_as_justice")
-                existing_rating.secm_ideol_l6_care_harm = secm_variables.get("secm_ideol_l6_care_harm")
-                existing_rating.secm_ideol_r1_agentic_culpability = secm_variables.get("secm_ideol_r1_agentic_culpability")
-                existing_rating.secm_ideol_r2_order_lexicon = secm_variables.get("secm_ideol_r2_order_lexicon")
-                existing_rating.secm_ideol_r3_institutional_defense = secm_variables.get("secm_ideol_r3_institutional_defense")
-                existing_rating.secm_ideol_r4_meritocratic_defense = secm_variables.get("secm_ideol_r4_meritocratic_defense")
-                existing_rating.secm_ideol_r5_change_as_threat = secm_variables.get("secm_ideol_r5_change_as_threat")
-                existing_rating.secm_ideol_r6_sanctity_degradation = secm_variables.get("secm_ideol_r6_sanctity_degradation")
-                existing_rating.secm_epist_h1_primary_documentation = secm_variables.get("secm_epist_h1_primary_documentation")
-                existing_rating.secm_epist_h2_adversarial_sourcing = secm_variables.get("secm_epist_h2_adversarial_sourcing")
-                existing_rating.secm_epist_h3_specific_attribution = secm_variables.get("secm_epist_h3_specific_attribution")
-                existing_rating.secm_epist_h4_data_contextualization = secm_variables.get("secm_epist_h4_data_contextualization")
-                existing_rating.secm_epist_h5_methodological_transparency = secm_variables.get("secm_epist_h5_methodological_transparency")
-                existing_rating.secm_epist_e1_emotive_adjectives = secm_variables.get("secm_epist_e1_emotive_adjectives")
-                existing_rating.secm_epist_e2_labeling_othering = secm_variables.get("secm_epist_e2_labeling_othering")
-                existing_rating.secm_epist_e3_causal_certainty = secm_variables.get("secm_epist_e3_causal_certainty")
-                existing_rating.secm_epist_e4_imperative_direct_address = secm_variables.get("secm_epist_e4_imperative_direct_address")
-                existing_rating.secm_epist_e5_motivated_reasoning = secm_variables.get("secm_epist_e5_motivated_reasoning")
-                existing_rating.secm_reasoning_json = json.dumps(secm_reasoning) if secm_reasoning else None
-                existing_rating.evaluated_at = datetime.now(UTC)
-                db.commit()
-            else:
-                # Create new rating
-                new_rating = BiasRating(
-                    article_id=article_id,
-                    bias_score=overall_bias_score,
-                    partisan_bias=partisan_bias,
-                    affective_bias=affective_bias,
-                    framing_bias=framing_bias,
-                    sourcing_bias=sourcing_bias,
-                    reasoning=None,
-                    evaluated_at=datetime.now(UTC),
-                    secm_ideological_score=secm_ideological,
-                    secm_epistemic_score=secm_epistemic,
-                    secm_ideol_l1_systemic_naming=secm_variables.get("secm_ideol_l1_systemic_naming"),
-                    secm_ideol_l2_power_gap_lexicon=secm_variables.get("secm_ideol_l2_power_gap_lexicon"),
-                    secm_ideol_l3_elite_culpability=secm_variables.get("secm_ideol_l3_elite_culpability"),
-                    secm_ideol_l4_resource_redistribution=secm_variables.get("secm_ideol_l4_resource_redistribution"),
-                    secm_ideol_l5_change_as_justice=secm_variables.get("secm_ideol_l5_change_as_justice"),
-                    secm_ideol_l6_care_harm=secm_variables.get("secm_ideol_l6_care_harm"),
-                    secm_ideol_r1_agentic_culpability=secm_variables.get("secm_ideol_r1_agentic_culpability"),
-                    secm_ideol_r2_order_lexicon=secm_variables.get("secm_ideol_r2_order_lexicon"),
-                    secm_ideol_r3_institutional_defense=secm_variables.get("secm_ideol_r3_institutional_defense"),
-                    secm_ideol_r4_meritocratic_defense=secm_variables.get("secm_ideol_r4_meritocratic_defense"),
-                    secm_ideol_r5_change_as_threat=secm_variables.get("secm_ideol_r5_change_as_threat"),
-                    secm_ideol_r6_sanctity_degradation=secm_variables.get("secm_ideol_r6_sanctity_degradation"),
-                    secm_epist_h1_primary_documentation=secm_variables.get("secm_epist_h1_primary_documentation"),
-                    secm_epist_h2_adversarial_sourcing=secm_variables.get("secm_epist_h2_adversarial_sourcing"),
-                    secm_epist_h3_specific_attribution=secm_variables.get("secm_epist_h3_specific_attribution"),
-                    secm_epist_h4_data_contextualization=secm_variables.get("secm_epist_h4_data_contextualization"),
-                    secm_epist_h5_methodological_transparency=secm_variables.get("secm_epist_h5_methodological_transparency"),
-                    secm_epist_e1_emotive_adjectives=secm_variables.get("secm_epist_e1_emotive_adjectives"),
-                    secm_epist_e2_labeling_othering=secm_variables.get("secm_epist_e2_labeling_othering"),
-                    secm_epist_e3_causal_certainty=secm_variables.get("secm_epist_e3_causal_certainty"),
-                    secm_epist_e4_imperative_direct_address=secm_variables.get("secm_epist_e4_imperative_direct_address"),
-                    secm_epist_e5_motivated_reasoning=secm_variables.get("secm_epist_e5_motivated_reasoning"),
-                    secm_reasoning_json=json.dumps(secm_reasoning) if secm_reasoning else None,
+                # Check if bias rating already exists (might need SECM update)
+                existing_rating = db.query(BiasRating).filter(BiasRating.article_id == article_id).first()
+                
+                if existing_rating:
+                    # Update existing rating with SECM scores
+                    existing_rating.secm_ideological_score = secm_ideological
+                    existing_rating.secm_epistemic_score = secm_epistemic
+                    existing_rating.secm_ideol_l1_systemic_naming = secm_variables.get("secm_ideol_l1_systemic_naming")
+                    existing_rating.secm_ideol_l2_power_gap_lexicon = secm_variables.get("secm_ideol_l2_power_gap_lexicon")
+                    existing_rating.secm_ideol_l3_elite_culpability = secm_variables.get("secm_ideol_l3_elite_culpability")
+                    existing_rating.secm_ideol_l4_resource_redistribution = secm_variables.get("secm_ideol_l4_resource_redistribution")
+                    existing_rating.secm_ideol_l5_change_as_justice = secm_variables.get("secm_ideol_l5_change_as_justice")
+                    existing_rating.secm_ideol_l6_care_harm = secm_variables.get("secm_ideol_l6_care_harm")
+                    existing_rating.secm_ideol_r1_agentic_culpability = secm_variables.get("secm_ideol_r1_agentic_culpability")
+                    existing_rating.secm_ideol_r2_order_lexicon = secm_variables.get("secm_ideol_r2_order_lexicon")
+                    existing_rating.secm_ideol_r3_institutional_defense = secm_variables.get("secm_ideol_r3_institutional_defense")
+                    existing_rating.secm_ideol_r4_meritocratic_defense = secm_variables.get("secm_ideol_r4_meritocratic_defense")
+                    existing_rating.secm_ideol_r5_change_as_threat = secm_variables.get("secm_ideol_r5_change_as_threat")
+                    existing_rating.secm_ideol_r6_sanctity_degradation = secm_variables.get("secm_ideol_r6_sanctity_degradation")
+                    existing_rating.secm_epist_h1_primary_documentation = secm_variables.get("secm_epist_h1_primary_documentation")
+                    existing_rating.secm_epist_h2_adversarial_sourcing = secm_variables.get("secm_epist_h2_adversarial_sourcing")
+                    existing_rating.secm_epist_h3_specific_attribution = secm_variables.get("secm_epist_h3_specific_attribution")
+                    existing_rating.secm_epist_h4_data_contextualization = secm_variables.get("secm_epist_h4_data_contextualization")
+                    existing_rating.secm_epist_h5_methodological_transparency = secm_variables.get("secm_epist_h5_methodological_transparency")
+                    existing_rating.secm_epist_e1_emotive_adjectives = secm_variables.get("secm_epist_e1_emotive_adjectives")
+                    existing_rating.secm_epist_e2_labeling_othering = secm_variables.get("secm_epist_e2_labeling_othering")
+                    existing_rating.secm_epist_e3_causal_certainty = secm_variables.get("secm_epist_e3_causal_certainty")
+                    existing_rating.secm_epist_e4_imperative_direct_address = secm_variables.get("secm_epist_e4_imperative_direct_address")
+                    existing_rating.secm_epist_e5_motivated_reasoning = secm_variables.get("secm_epist_e5_motivated_reasoning")
+                    existing_rating.secm_reasoning_json = json.dumps(secm_reasoning) if secm_reasoning else None
+                    existing_rating.evaluated_at = datetime.now(UTC)
+                    db.commit()
+                else:
+                    # Create new rating
+                    new_rating = BiasRating(
+                        article_id=article_id,
+                        bias_score=overall_bias_score,
+                        partisan_bias=partisan_bias,
+                        affective_bias=affective_bias,
+                        framing_bias=framing_bias,
+                        sourcing_bias=sourcing_bias,
+                        reasoning=None,
+                        evaluated_at=datetime.now(UTC),
+                        secm_ideological_score=secm_ideological,
+                        secm_epistemic_score=secm_epistemic,
+                        secm_ideol_l1_systemic_naming=secm_variables.get("secm_ideol_l1_systemic_naming"),
+                        secm_ideol_l2_power_gap_lexicon=secm_variables.get("secm_ideol_l2_power_gap_lexicon"),
+                        secm_ideol_l3_elite_culpability=secm_variables.get("secm_ideol_l3_elite_culpability"),
+                        secm_ideol_l4_resource_redistribution=secm_variables.get("secm_ideol_l4_resource_redistribution"),
+                        secm_ideol_l5_change_as_justice=secm_variables.get("secm_ideol_l5_change_as_justice"),
+                        secm_ideol_l6_care_harm=secm_variables.get("secm_ideol_l6_care_harm"),
+                        secm_ideol_r1_agentic_culpability=secm_variables.get("secm_ideol_r1_agentic_culpability"),
+                        secm_ideol_r2_order_lexicon=secm_variables.get("secm_ideol_r2_order_lexicon"),
+                        secm_ideol_r3_institutional_defense=secm_variables.get("secm_ideol_r3_institutional_defense"),
+                        secm_ideol_r4_meritocratic_defense=secm_variables.get("secm_ideol_r4_meritocratic_defense"),
+                        secm_ideol_r5_change_as_threat=secm_variables.get("secm_ideol_r5_change_as_threat"),
+                        secm_ideol_r6_sanctity_degradation=secm_variables.get("secm_ideol_r6_sanctity_degradation"),
+                        secm_epist_h1_primary_documentation=secm_variables.get("secm_epist_h1_primary_documentation"),
+                        secm_epist_h2_adversarial_sourcing=secm_variables.get("secm_epist_h2_adversarial_sourcing"),
+                        secm_epist_h3_specific_attribution=secm_variables.get("secm_epist_h3_specific_attribution"),
+                        secm_epist_h4_data_contextualization=secm_variables.get("secm_epist_h4_data_contextualization"),
+                        secm_epist_h5_methodological_transparency=secm_variables.get("secm_epist_h5_methodological_transparency"),
+                        secm_epist_e1_emotive_adjectives=secm_variables.get("secm_epist_e1_emotive_adjectives"),
+                        secm_epist_e2_labeling_othering=secm_variables.get("secm_epist_e2_labeling_othering"),
+                        secm_epist_e3_causal_certainty=secm_variables.get("secm_epist_e3_causal_certainty"),
+                        secm_epist_e4_imperative_direct_address=secm_variables.get("secm_epist_e4_imperative_direct_address"),
+                        secm_epist_e5_motivated_reasoning=secm_variables.get("secm_epist_e5_motivated_reasoning"),
+                        secm_reasoning_json=json.dumps(secm_reasoning) if secm_reasoning else None,
+                    )
+                    db.add(new_rating)
+                    db.commit()
+
+                secm_str = f", SECM ideo={secm_ideological:+.2f}" if secm_ideological is not None else " (SECM skipped)"
+                logger.info(
+                    f"✅ Bias rating stored for article {article_id}: "
+                    f"overall={overall_bias_score}{secm_str}"
                 )
-                db.add(new_rating)
-                db.commit()
+                return True
 
-            secm_str = f", SECM ideo={secm_ideological:+.2f}" if secm_ideological is not None else " (SECM failed)"
-            logger.info(
-                f"✅ Bias rating stored for article {article_id}: "
-                f"overall={overall_bias_score}{secm_str}"
-            )
-            return True
+            except Exception as e:
+                logger.warning(f"❌ Bias analysis attempt {attempt + 1} failed for article {article_id}: {e}")
+                db.rollback()
+                if attempt < 2:  # Don't sleep after last attempt
+                    import asyncio
+                    import time
+                    time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s
 
-        except Exception as e:
-            logger.error(f"❌ Error analyzing bias for article {article_id}: {e}")
-            db.rollback()
-            return False
+        logger.error(f"❌ All bias analysis attempts failed for article {article_id}")
+        return False
 
     async def process_articles(self, articles: list[dict], run_llm: bool = True) -> int:
         """Process and store articles, optionally with LLM analysis"""
@@ -462,13 +484,13 @@ class NewsWorker:
 
         logger.info(f"📥 Processing {len(articles)} articles (LLM: {run_llm})...")
 
-        with get_connection() as db:
-            stored_count = 0
-            summary_count = 0
-            bias_count = 0
+        stored_count = 0
+        summary_count = 0
+        bias_count = 0
 
+        for i, article in enumerate(articles, 1):
             try:
-                for i, article in enumerate(articles, 1):
+                with get_connection() as db:
                     if not self.is_duplicate(db, article):
                         article_id = self.store_article(db, article)
                         if article_id:
@@ -478,17 +500,24 @@ class NewsWorker:
                                 raw_text = article.get("raw_text", "")
                                 logger.info(f"📰 [{i}/{len(articles)}] Processing article {article_id}: {article['title'][:50]}...")
                                 
-                                # Generate summary
-                                if self.generate_article_summary(db, article_id, raw_text):
-                                    summary_count += 1
+                                # Generate summary (isolated try/catch)
+                                try:
+                                    if self.generate_article_summary(db, article_id, raw_text):
+                                        summary_count += 1
+                                except Exception as e:
+                                    logger.error(f"❌ Summary failed for article {article_id}: {e}")
                                 
-                                # Analyze bias (legacy + SECM)
-                                if await self.analyze_article_bias(db, article_id, raw_text):
-                                    bias_count += 1
+                                # Analyze bias (isolated try/catch)
+                                try:
+                                    if await self.analyze_article_bias(db, article_id, raw_text):
+                                        bias_count += 1
+                                except Exception as e:
+                                    logger.error(f"❌ Bias analysis failed for article {article_id}: {e}")
                     else:
                         logger.debug(f"Duplicate skipped: {article['title']}")
             except Exception as e:
-                logger.error(f"❌ Error processing articles: {e}")
+                logger.error(f"❌ Failed to process article {i}: {e}")
+                continue  # Skip this article, continue with others
 
         if run_llm:
             logger.info(f"✅ Processing complete: {stored_count} stored, {summary_count} summaries, {bias_count} bias ratings")

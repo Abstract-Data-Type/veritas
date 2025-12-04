@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { fetchArticleById, summarizeArticle, formatDate, formatBiasScore, formatIdeologicalScore, formatEvidenceScore } from "@/lib/api/client";
+import { fetchArticleByUrl, decodeArticleSlug, summarizeArticle, formatDate, formatBiasScore, formatIdeologicalScore, formatEvidenceScore } from "@/lib/api/client";
 import { getPoliticalLeaning, getLeaningLabel } from "@/lib/api/types";
 import { layout, typography, button, badge, getLeaningTheme, cn } from "@/lib/theme";
 import { MethodologyModal } from "@/app/components/MethodologyModal";
 
 interface PageProps {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }
 
 // Get color class for ideological score (blue=left, gray=center, red=right)
@@ -26,14 +26,17 @@ function getEvidenceColorClass(score: number | null | undefined): string {
 }
 
 export default async function ArticleDetailPage({ params }: PageProps) {
-  const { id } = await params;
-  const articleId = parseInt(id, 10);
-
-  if (isNaN(articleId)) {
+  const { slug } = await params;
+  
+  // Decode the slug back to the original article URL
+  let articleUrl: string;
+  try {
+    articleUrl = decodeArticleSlug(slug);
+  } catch {
     notFound();
   }
 
-  const article = await fetchArticleById(articleId);
+  const article = await fetchArticleByUrl(articleUrl);
 
   if (!article) {
     notFound();
@@ -66,18 +69,6 @@ export default async function ArticleDetailPage({ params }: PageProps) {
       <article className="overflow-hidden rounded-lg border-2 border-gray-200 bg-white shadow-sm">
         {/* Title section */}
         <div className="px-6 py-6 bg-gray-50">
-          {/* OLD: Legacy bias badge and score - commented out in favor of SECM
-          <div className="mb-3 flex items-center gap-3">
-            <span className={cn(badge.base, theme.badge)}>
-              {getLeaningLabel(leaning)}
-            </span>
-            {article.bias_rating && (
-              <span className={typography.bodySmall}>
-                Bias Score: {formatBiasScore(article.bias_rating.bias_score)}
-              </span>
-            )}
-          </div>
-          */}
           <h1 className={typography.h1}>{article.title}</h1>
         </div>
 
@@ -121,26 +112,7 @@ export default async function ArticleDetailPage({ params }: PageProps) {
               <MethodologyModal />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              {/* OLD: Legacy visual bias meter - commented out in favor of SECM
-              <div className="col-span-2">
-                <div className="mb-2 flex justify-between text-xs text-gray-500">
-                  <span>Left (-1.0)</span>
-                  <span>Center (0)</span>
-                  <span>Right (+1.0)</span>
-                </div>
-                <div className="relative h-4 rounded-full bg-gradient-to-r from-blue-500 via-crimson to-red-500">
-                  <div
-                    className="absolute top-1/2 h-6 w-2 -translate-y-1/2 rounded-full bg-white shadow-lg ring-2 ring-foreground"
-                    style={{
-                      left: `${((article.bias_rating.bias_score ?? 0) + 1) * 50}%`,
-                      transform: "translate(-50%, -50%)",
-                    }}
-                  />
-                </div>
-              </div>
-              */}
-
-              {/* NEW: Ideological Spectrum (Beta) */}
+              {/* Ideological Spectrum */}
               {article.bias_rating.secm_ideological_score !== null && 
                article.bias_rating.secm_ideological_score !== undefined && (
                 <div className="col-span-2 mt-2 p-4 rounded-lg bg-amber-50 border border-amber-200">
@@ -173,7 +145,7 @@ export default async function ArticleDetailPage({ params }: PageProps) {
                 </div>
               )}
 
-              {/* NEW: Epistemic Integrity (Beta) */}
+              {/* Epistemic Integrity */}
               {article.bias_rating.secm_epistemic_score !== null && 
                article.bias_rating.secm_epistemic_score !== undefined && (
                 <div className="col-span-2 mt-2 p-4 rounded-lg bg-emerald-50 border border-emerald-200">
@@ -205,20 +177,6 @@ export default async function ArticleDetailPage({ params }: PageProps) {
                   </div>
                 </div>
               )}
-
-              {/* OLD: Individual dimension scores - commented out in favor of SECM
-              {(article.bias_rating.partisan_bias !== undefined ||
-                article.bias_rating.affective_bias !== undefined ||
-                article.bias_rating.framing_bias !== undefined ||
-                article.bias_rating.sourcing_bias !== undefined) && (
-                <>
-                  <BiasScoreCard label="Partisan Bias" value={article.bias_rating.partisan_bias} />
-                  <BiasScoreCard label="Affective Bias" value={article.bias_rating.affective_bias} />
-                  <BiasScoreCard label="Framing Bias" value={article.bias_rating.framing_bias} />
-                  <BiasScoreCard label="Sourcing Bias" value={article.bias_rating.sourcing_bias} />
-                </>
-              )}
-              */}
             </div>
           </div>
         )}
@@ -240,19 +198,6 @@ export default async function ArticleDetailPage({ params }: PageProps) {
           )}
         </div>
       </article>
-    </div>
-  );
-}
-
-// =============================================================================
-// COMPONENTS
-// =============================================================================
-
-function BiasScoreCard({ label, value }: { label: string; value: number | null | undefined }) {
-  return (
-    <div className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
-      <span className={typography.bodySmall}>{label}</span>
-      <span className="font-medium text-foreground">{value?.toFixed(2) ?? "N/A"}</span>
     </div>
   );
 }

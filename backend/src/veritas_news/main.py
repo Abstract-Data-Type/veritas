@@ -82,9 +82,8 @@ async def lifespan(app: FastAPI):
                         first_run = False
                     else:
                         logger.info("🔄 Starting 12-hour refresh cycle...")
-                        # Clear old articles before fetching new ones
-                        logger.info("🗑️ Clearing old articles...")
-                        news_worker.clear_database()
+                        # NOTE: We no longer wipe the database to preserve article URLs
+                        # This ensures links remain stable across refresh cycles
 
                     count = await news_worker.run_single_fetch(
                         use_cnn=use_cnn, use_newsapi=use_newsapi

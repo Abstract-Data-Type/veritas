@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
@@ -8,8 +8,6 @@ from ..db.sqlalchemy import get_session
 from ..models.sqlalchemy_models import Article, BiasRating
 
 router = APIRouter()
-
-from fastapi import Header, HTTPException
 import os
 from ..worker.news_worker import NewsWorker
 
@@ -72,6 +70,47 @@ class ArticleListResponse(BaseModel):
 
     articles: list[ArticleResponse]
     total: int
+
+
+@router.get("/by-url", response_model=ArticleResponse)
+async def get_article_by_url(
+    url: str = Query(..., description="The article's source URL"),
+    db: Session = Depends(get_session),
+):
+    """
+    Get a single article by its source URL.
+    
+    This endpoint provides stable article lookups that persist across
+    database refreshes, since URLs are unique and stable identifiers.
+    """
+    article = db.query(Article).filter(Article.url == url).first()
+    
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    
+    # Build bias rating info if available
+    bias_rating_info = None
+    if article.bias_ratings:
+        rating = article.bias_ratings[0]
+        bias_rating_info = BiasRatingInfo(
+            rating_id=rating.rating_id,
+            bias_score=rating.bias_score,
+            reasoning=rating.reasoning,
+            evaluated_at=rating.evaluated_at,
+            secm_ideological_score=rating.secm_ideological_score,
+            secm_epistemic_score=rating.secm_epistemic_score,
+        )
+    
+    return ArticleResponse(
+        article_id=article.article_id,
+        title=article.title,
+        source=article.source,
+        url=article.url,
+        published_at=article.published_at,
+        raw_text=article.raw_text,
+        created_at=article.created_at,
+        bias_rating=bias_rating_info,
+    )
 
 
 @router.get("/latest", response_model=ArticleListResponse)

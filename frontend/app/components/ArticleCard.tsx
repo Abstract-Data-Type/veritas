@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Article, getPoliticalLeaning, getLeaningLabel } from "@/lib/api/types";
-import { formatDate, formatBiasScore, formatIdeologicalScore, formatEvidenceScore } from "@/lib/api/client";
+import { formatDate, formatBiasScore, formatIdeologicalScore, formatEvidenceScore, encodeArticleSlug } from "@/lib/api/client";
 import { getLeaningTheme, articleCard, badge, skeleton, cn } from "@/lib/theme";
 import { Tooltip, InfoIcon } from "./Tooltip";
 import { MethodologyModal } from "./MethodologyModal";
@@ -28,9 +28,12 @@ function getEvidenceColorClass(score: number | null | undefined): string {
 export function ArticleCard({ article }: ArticleCardProps) {
   const leaning = getPoliticalLeaning(article.bias_rating?.bias_score);
   const theme = getLeaningTheme(leaning);
+  
+  // Use URL-based slug for stable links (survives database refreshes)
+  const slug = article.url ? encodeArticleSlug(article.url) : String(article.article_id);
 
   return (
-    <Link href={`/articles/${article.article_id}`} className={articleCard.wrapper}>
+    <Link href={`/articles/${slug}`} className={articleCard.wrapper}>
       <article className={cn(articleCard.article, theme.border)}>
         {/* Title and Badge */}
         <div className={articleCard.titleRow}>

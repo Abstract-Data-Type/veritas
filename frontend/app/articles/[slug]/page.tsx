@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { fetchArticleById, summarizeArticle, formatDate, formatBiasScore, formatIdeologicalScore, formatEvidenceScore } from "@/lib/api/client";
+import { fetchArticleByUrl, decodeArticleSlug, summarizeArticle, formatDate, formatBiasScore, formatIdeologicalScore, formatEvidenceScore } from "@/lib/api/client";
 import { getPoliticalLeaning, getLeaningLabel } from "@/lib/api/types";
 import { layout, typography, button, badge, getLeaningTheme, cn } from "@/lib/theme";
 import { MethodologyModal } from "@/app/components/MethodologyModal";
 
 interface PageProps {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }
 
 // Get color class for ideological score (blue=left, gray=center, red=right)
@@ -26,14 +26,17 @@ function getEvidenceColorClass(score: number | null | undefined): string {
 }
 
 export default async function ArticleDetailPage({ params }: PageProps) {
-  const { id } = await params;
-  const articleId = parseInt(id, 10);
-
-  if (isNaN(articleId)) {
+  const { slug } = await params;
+  
+  // Decode the slug back to the original article URL
+  let articleUrl: string;
+  try {
+    articleUrl = decodeArticleSlug(slug);
+  } catch {
     notFound();
   }
 
-  const article = await fetchArticleById(articleId);
+  const article = await fetchArticleByUrl(articleUrl);
 
   if (!article) {
     notFound();

@@ -122,41 +122,21 @@ export async function fetchArticles(options?: {
 }
 
 /**
- * Encode an article URL into a URL-safe slug for routing
- * Uses base64url encoding for reliable round-trip conversion
- */
-export function encodeArticleSlug(url: string): string {
-  // Use base64url encoding (URL-safe base64)
-  const base64 = btoa(url);
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-/**
- * Decode a slug back to the original article URL
- */
-export function decodeArticleSlug(slug: string): string {
-  // Restore standard base64 characters and padding
-  let base64 = slug.replace(/-/g, '+').replace(/_/g, '/');
-  while (base64.length % 4) base64 += '=';
-  return atob(base64);
-}
-
-/**
- * Fetch a single article by its source URL
+ * Fetch a single article by ID
  *
- * @param url - The article's source URL
+ * Note: The backend doesn't have a dedicated single-article endpoint,
+ * so we fetch the list and find the article. In a production app,
+ * you might want to add a dedicated endpoint.
+ *
+ * @param id - Article ID
  * @returns Promise resolving to Article or null if not found
  */
-export async function fetchArticleByUrl(url: string): Promise<Article | null> {
-  try {
-    const encodedUrl = encodeURIComponent(url);
-    return await apiFetch<Article>(`/articles/by-url?url=${encodedUrl}`);
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 404) {
-      return null;
-    }
-    throw error;
-  }
+export async function fetchArticleById(id: number): Promise<Article | null> {
+  // Fetch a larger list to increase chances of finding the article
+  const response = await fetchArticles({ limit: 100 });
+
+  const article = response.articles.find((a) => a.article_id === id);
+  return article || null;
 }
 
 /**
